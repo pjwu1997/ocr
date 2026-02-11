@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "WebSearch",
+      "WebFetch(domain:docs.vllm.ai)",
+      "WebFetch(domain:medium.com)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:voice.ai)",
+      "WebFetch(domain:www.paddleocr.ai)",
+      "Bash(chmod:*)"
+    ]
+  }
+}
