@@ -1,0 +1,65 @@
+services:
+  vllm-server:
+    image: nvidia/cuda:12.8.0-devel-ubuntu22.04
+    container_name: ocr-vllm-server
+    restart: unless-stopped
+    runtime: nvidia
+    network_mode: host
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+      - PATH=/venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+      - VIRTUAL_ENV=/venv
+    volumes:
+      - /home/asiamath/.venv_vllm:/venv
+      - /home/asiamath/.local/share/uv:/home/asiamath/.local/share/uv
+      - /home/asiamath/Users/PJ/ocr:/app
+      - /home/asiamath/.cache:/root/.cache
+    working_dir: /app
+    command: ["bash", "-c", "source /venv/bin/activate && python -m paddleocr genai_server --model_name PaddleOCR-VL-1.5-0.9B --backend vllm --port 8000 --backend_config /app/backend_config.yml"]
+    healthcheck:
+      test: ["CMD", "bash", "-c", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/v1/models')\" || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 10
+      start_period: 120s
+
+  web-app:
+    image: nvidia/cuda:12.8.0-runtime-ubuntu22.04
+    container_name: ocr-web-app
+    restart: unless-stopped
+    runtime: nvidia
+    network_mode: host
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+      - PATH=/venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+      - VIRTUAL_ENV=/venv
+    volumes:
+      - /home/asiamath/.venv_vllm:/venv
+      - /home/asiamath/.local/share/uv:/home/asiamath/.local/share/uv
+      - /home/asiamath/Users/PJ/ocr:/app
+      - /home/asiamath/.cache:/root/.cache
+    working_dir: /app
+    command: ["bash", "-c", "source /venv/bin/activate && python app.py"]
+    depends_on:
+      vllm-server:
+        condition: service_healthy
+
+  gradio-app:
+    image: nvidia/cuda:12.8.0-runtime-ubuntu22.04
+    container_name: ocr-gradio-app
+    restart: always
+    runtime: nvidia
+    network_mode: host
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+      - PATH=/venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+      - VIRTUAL_ENV=/venv
+    volumes:
+      - /home/asiamath/.venv_vllm:/venv
+      - /home/asiamath/.local/share/uv:/home/asiamath/.local/share/uv
+      - /home/asiamath/Users/PJ/ocr:/app
+      - /home/asiamath/.cache:/root/.cache
+    working_dir: /app
+    command: ["bash", "-c", "source /venv/bin/activate && python gradio_app.py"]
+    depends_on:
+      - web-app

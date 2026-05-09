@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>AsiaMath OCR</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/styles.css" />
+</head>
+<body>
+  <div class="bg-grid"></div>
+
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-dot"></span>
+      <div>
+        <p class="brand-title">AsiaMath OCR</p>
+        <p class="brand-sub">Upload PDF or image — OCR recognition, markdown output, layout segmentation</p>
+      </div>
+    </div>
+    <div class="mode-switch">
+      <button class="tab-btn active" data-mode="single">Single File</button>
+      <button class="tab-btn" data-mode="history">History</button>
+    </div>
+  </header>
+
+  <main class="container">
+    <!-- Single file mode -->
+    <section id="singleView" class="view active">
+      <aside class="side-panel">
+        <div class="panel-head">
+          <h2>Upload</h2>
+        </div>
+
+        <div class="upload-zone" id="dropZone">
+          <div class="upload-icon">
+            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+              <polyline points="17 8 12 3 7 8"/>
+              <line x1="12" y1="3" x2="12" y2="15"/>
+            </svg>
+          </div>
+          <p class="upload-text">Drag & drop file here</p>
+          <p class="upload-sub">or click to browse</p>
+          <p class="upload-sub">Supports PDF, JPG, JPEG, PNG</p>
+          <input type="file" id="fileInput" accept=".pdf,.jpg,.jpeg,.png" hidden />
+        </div>
+
+        <div id="fileInfo" class="file-info" style="display:none;">
+          <div class="file-card">
+            <div class="file-name" id="fileName">-</div>
+            <div class="file-meta" id="fileMeta">-</div>
+            <button class="btn-ghost btn-sm" id="clearFileBtn">Remove</button>
+          </div>
+        </div>
+
+        <button id="runBtn" class="btn-primary btn-full" disabled>Run OCR</button>
+
+        <div id="progressArea" style="display:none;">
+          <div class="progress-bar">
+            <div class="progress-fill" id="progressFill"></div>
+          </div>
+          <p class="progress-text" id="progressText">Processing...</p>
+        </div>
+      </aside>
+
+      <section class="work-panel">
+        <div id="emptyState" class="empty-state">
+          <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round" opacity="0.3">
+            <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+            <circle cx="8.5" cy="8.5" r="1.5"/>
+            <polyline points="21 15 16 10 5 21"/>
+          </svg>
+          <p>Upload a file and run OCR to see results</p>
+        </div>
+
+        <div id="resultsArea" style="display:none;">
+          <div class="result-tabs">
+            <button class="result-tab active" data-tab="original">Original</button>
+            <button class="result-tab" data-tab="fields">公文欄位</button>
+            <button class="result-tab" data-tab="markdown">Markdown</button>
+            <button class="result-tab" data-tab="layout">Layout</button>
+            <button class="result-tab" data-tab="crops">Crops</button>
+          </div>
+
+          <div class="result-content" id="tabOriginal">
+            <div class="gallery" id="originalGallery"></div>
+          </div>
+
+          <div class="result-content" id="tabFields" style="display:none;">
+            <p class="section-title">人工覆核（可修改欄位）</p>
+            <div class="table-wrap">
+              <div class="row row-field head">
+                <div>欄位</div>
+                <div>AI 原值</div>
+                <div>人工確認值</div>
+              </div>
+              <div id="fieldsTableBody"></div>
+            </div>
+            <div class="info-card" style="margin-top:12px;">
+              <label>修正說明</label>
+              <textarea class="text-area" id="editReason" placeholder="請填寫修正原因（例如：手寫辨識誤差）"></textarea>
+            </div>
+            <div class="inline-actions">
+              <button class="btn-ghost" id="saveReviewBtn">儲存覆核內容</button>
+            </div>
+          </div>
+
+          <div class="result-content" id="tabMarkdown" style="display:none;">
+            <div class="markdown-wrap">
+              <div class="markdown-toolbar">
+                <button class="btn-ghost btn-sm" id="copyMdBtn">Copy</button>
+                <button class="btn-ghost btn-sm" id="toggleRawBtn">Toggle Raw</button>
+              </div>
+              <div class="markdown-body" id="markdownBody"></div>
+              <pre class="markdown-raw" id="markdownRaw" style="display:none;"></pre>
+            </div>
+          </div>
+
+          <div class="result-content" id="tabLayout" style="display:none;">
+            <div class="gallery" id="layoutGallery"></div>
+          </div>
+
+          <div class="result-content" id="tabCrops" style="display:none;">
+            <div class="gallery gallery-grid" id="cropsGallery"></div>
+          </div>
+        </div>
+      </section>
+    </section>
+
+    <!-- History mode -->
+    <section id="historyView" class="view">
+      <div class="history-empty">
+        <p>Processing history will appear here (coming soon)</p>
+      </div>
+    </section>
+  </main>
+
+  <div id="toast" class="toast"></div>
+  <script src="/static/app.js"></script>
+</body>
+</html>
