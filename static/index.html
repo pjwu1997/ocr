@@ -22,6 +22,7 @@
     </div>
     <div class="mode-switch">
       <button class="tab-btn active" data-mode="single">Single File</button>
+      <button class="tab-btn" data-mode="rules">Rules</button>
       <button class="tab-btn" data-mode="history">History</button>
     </div>
   </header>
@@ -32,6 +33,13 @@
       <aside class="side-panel">
         <div class="panel-head">
           <h2>Upload</h2>
+        </div>
+
+        <div class="doc-type-selector">
+          <label for="docTypeSelect">Document Type</label>
+          <select id="docTypeSelect">
+            <option value="0">-- Select type --</option>
+          </select>
         </div>
 
         <div class="upload-zone" id="dropZone">
@@ -79,7 +87,7 @@
         <div id="resultsArea" style="display:none;">
           <div class="result-tabs">
             <button class="result-tab active" data-tab="original">Original</button>
-            <button class="result-tab" data-tab="fields">公文欄位</button>
+            <button class="result-tab" data-tab="fields">欄位提取</button>
             <button class="result-tab" data-tab="markdown">Markdown</button>
             <button class="result-tab" data-tab="layout">Layout</button>
             <button class="result-tab" data-tab="crops">Crops</button>
@@ -90,6 +98,7 @@
           </div>
 
           <div class="result-content" id="tabFields" style="display:none;">
+            <div id="detectedTypeBadge" class="type-badge" style="display:none;"></div>
             <p class="section-title">人工覆核（可修改欄位）</p>
             <div class="table-wrap">
               <div class="row row-field head">
@@ -130,10 +139,41 @@
       </section>
     </section>
 
-    <!-- History mode -->
+    <!-- Rules management -->
+    <section id="rulesView" class="view">
+      <div class="rules-panel">
+        <div class="rules-header">
+          <h2>Extraction Rules</h2>
+          <button class="btn-primary btn-sm" id="addRuleBtn">+ Add Rule</button>
+        </div>
+        <div class="table-wrap">
+          <div class="row row-rule head">
+            <div>#</div>
+            <div>Category</div>
+            <div>Document Type</div>
+            <div>Fields</div>
+            <div>Actions</div>
+          </div>
+          <div id="rulesTableBody"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- History -->
     <section id="historyView" class="view">
-      <div class="history-empty">
-        <p>Processing history will appear here (coming soon)</p>
+      <div class="history-panel">
+        <div class="rules-header">
+          <h2>Processing History</h2>
+        </div>
+        <div class="table-wrap">
+          <div class="row row-history head">
+            <div>Filename</div>
+            <div>Type</div>
+            <div>Status</div>
+            <div>Date</div>
+          </div>
+          <div id="historyTableBody"></div>
+        </div>
       </div>
     </section>
   </main>

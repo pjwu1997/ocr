@@ -25,12 +25,19 @@ const refs = {
   saveReviewBtn: document.getElementById("saveReviewBtn"),
   resultTabs: document.querySelectorAll(".result-tab"),
   singleView: document.getElementById("singleView"),
+  rulesView: document.getElementById("rulesView"),
   historyView: document.getElementById("historyView"),
+  docTypeSelect: document.getElementById("docTypeSelect"),
+  detectedTypeBadge: document.getElementById("detectedTypeBadge"),
+  rulesTableBody: document.getElementById("rulesTableBody"),
+  addRuleBtn: document.getElementById("addRuleBtn"),
+  historyTableBody: document.getElementById("historyTableBody"),
 };
 
 let selectedFile = null;
 let rawMarkdown = "";
 let showRaw = false;
+let currentResultId = null;
 
 // ── Helpers ──
 
@@ -45,6 +52,30 @@ function formatSize(bytes) {
   if (bytes < 1048576) return (bytes / 1024).toFixed(1) + " KB";
   return (bytes / 1048576).toFixed(1) + " MB";
 }
+
+// ── Load rules into dropdown ──
+
+let allRules = [];
+
+async function loadRules() {
+  try {
+    const res = await fetch("/api/rules");
+    if (!res.ok) return;
+    allRules = await res.json();
+    // Populate dropdown
+    refs.docTypeSelect.innerHTML = '<option value="0">-- Select type --</option>';
+    allRules.forEach((rule) => {
+      const opt = document.createElement("option");
+      opt.value = rule.id;
+      opt.textContent = `${rule.welfare_item}. ${rule.category} — ${rule.doc_type}`;
+      refs.docTypeSelect.appendChild(opt);
+    });
+  } catch (e) {
+    console.error("Failed to load rules:", e);
+  }
+}
+
+loadRules();
 
 // ── File selection ──
 
@@ -98,13 +129,12 @@ refs.tabBtns.forEach((btn) => {
   btn.addEventListener("click", () => {
     refs.tabBtns.forEach((b) => b.classList.remove("active"));
     btn.classList.add("active");
-    if (btn.dataset.mode === "single") {
-      refs.singleView.classList.add("active");
-      refs.historyView.classList.remove("active");
-    } else {
-      refs.singleView.classList.remove("active");
-      refs.historyView.classList.add("active");
-    }
+    const mode = btn.dataset.mode;
+    refs.singleView.classList.toggle("active", mode === "single");
+    refs.rulesView.classList.toggle("active", mode === "rules");
+    refs.historyView.classList.toggle("active", mode === "history");
+    if (mode === "rules") loadRulesTable();
+    if (mode === "history") loadHistory();
   });
 });
 
@@ -135,7 +165,7 @@ refs.toggleRawBtn.addEventListener("click", () => {
   refs.toggleRawBtn.textContent = showRaw ? "Toggle Rendered" : "Toggle Raw";
 });
 
-// ── 公文 fields review table ──
+// ── Fields review table ──
 
 let currentFields = [];
 
@@ -144,11 +174,11 @@ function renderFieldsTable(fields) {
   refs.fieldsTableBody.innerHTML = "";
   fields.forEach((f, idx) => {
     const isNo = f.ai_value === "no";
-    const isFineCheck = f.field === "是否包含「罰款」關鍵字";
+    const isBoolField = f.ai_value === "是" || f.ai_value === "否";
     const row = document.createElement("div");
     row.className = "row row-field";
     let inputHtml;
-    if (isFineCheck) {
+    if (isBoolField) {
       const checked = f.ai_value === "是" ? "checked" : "";
       inputHtml = `<label class="checkbox-label"><input type="checkbox" class="review-checkbox" data-index="${idx}" ${checked} /> 是</label>`;
     } else {
@@ -156,14 +186,19 @@ function renderFieldsTable(fields) {
     }
     row.innerHTML = `
       <div class="field-label">${f.field}</div>
-      <div class="ai-value${isNo ? " no-match" : ""}">${isFineCheck ? (f.ai_value === "是" ? "是" : "否") : f.ai_value}</div>
+      <div class="ai-value${isNo ? " no-match" : ""}">${f.ai_value}</div>
       <div>${inputHtml}</div>
     `;
     refs.fieldsTableBody.appendChild(row);
   });
 }
 
-refs.saveReviewBtn.addEventListener("click", () => {
+refs.saveReviewBtn.addEventListener("click", async () => {
+  if (!currentResultId) {
+    showToast("No OCR result to save");
+    return;
+  }
+
   const reviewed = currentFields.map((f, idx) => {
     const checkbox = refs.fieldsTableBody.querySelector(`.review-checkbox[data-index="${idx}"]`);
     const textarea = refs.fieldsTableBody.querySelector(`.review-textarea[data-index="${idx}"]`);
@@ -174,8 +209,21 @@ refs.saveReviewBtn.addEventListener("click", () => {
     };
   });
   const reason = refs.editReason.value;
-  console.log("Review saved:", { fields: reviewed, reason });
-  showToast("覆核內容已儲存");
+
+  try {
+    const res = await fetch(`/api/results/${currentResultId}/review`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ fields: reviewed, edit_reason: reason }),
+    });
+    if (res.ok) {
+      showToast("覆核內容已儲存");
+    } else {
+      showToast("Save failed");
+    }
+  } catch (e) {
+    showToast("Save error: " + e.message);
+  }
 });
 
 // ── Gallery with page nav ──
@@ -235,6 +283,7 @@ refs.runBtn.addEventListener("click", async () => {
 
   const formData = new FormData();
   formData.append("file", selectedFile);
+  formData.append("rule_id", refs.docTypeSelect.value);
 
   try {
     const res = await fetch("/api/ocr", { method: "POST", body: formData });
@@ -246,6 +295,9 @@ refs.runBtn.addEventListener("click", async () => {
 
     const data = await res.json();
 
+    // Save result ID for review
+    currentResultId = data.result_id || null;
+
     // Progress done
     refs.progressFill.className = "progress-fill";
     refs.progressFill.style.width = "100%";
@@ -255,8 +307,16 @@ refs.runBtn.addEventListener("click", async () => {
     renderGalleryWithNav(refs.originalGallery, data.original_pages || []);
     renderGalleryWithNav(refs.layoutGallery, data.layout_images || []);
 
-    // 公文 fields
-    renderFieldsTable(data.gongwen_fields || []);
+    // Detected type badge
+    if (data.detected_type) {
+      refs.detectedTypeBadge.textContent = "Document: " + data.detected_type;
+      refs.detectedTypeBadge.style.display = "inline-block";
+    } else {
+      refs.detectedTypeBadge.style.display = "none";
+    }
+
+    // Fields (dynamic based on rule)
+    renderFieldsTable(data.extracted_fields || []);
 
     // Markdown
     rawMarkdown = data.markdown || "";
@@ -300,6 +360,161 @@ refs.runBtn.addEventListener("click", async () => {
     }, 3000);
   }
 });
+
+// ── Rules Management ──
+
+async function loadRulesTable() {
+  try {
+    const res = await fetch("/api/rules");
+    if (!res.ok) return;
+    const rules = await res.json();
+    refs.rulesTableBody.innerHTML = "";
+    rules.forEach((rule) => {
+      const fields = rule.fields_json || [];
+      const fieldTags = fields.map((f) => `<span class="field-tag">${f.name}</span>`).join("");
+      const row = document.createElement("div");
+      row.className = "row row-rule";
+      row.innerHTML = `
+        <div>${rule.welfare_item || ""}</div>
+        <div>${rule.category}</div>
+        <div>${rule.doc_type}</div>
+        <div class="field-tags">${fieldTags || '<span style="color:var(--muted)">—</span>'}</div>
+        <div class="row-actions">
+          <button class="btn-icon" onclick="editRule(${rule.id})">Edit</button>
+          <button class="btn-icon danger" onclick="deleteRule(${rule.id})">Del</button>
+        </div>
+      `;
+      refs.rulesTableBody.appendChild(row);
+    });
+  } catch (e) {
+    console.error("Failed to load rules:", e);
+  }
+}
+
+refs.addRuleBtn.addEventListener("click", () => showRuleModal());
+
+function showRuleModal(rule = null) {
+  const isEdit = !!rule;
+  const overlay = document.createElement("div");
+  overlay.className = "modal-overlay";
+
+  const fieldsStr = rule
+    ? (rule.fields_json || []).map((f) => f.name).join("\n")
+    : "";
+
+  overlay.innerHTML = `
+    <div class="modal-card">
+      <h3>${isEdit ? "Edit Rule" : "Add Rule"}</h3>
+      <label>Welfare Item #</label>
+      <input id="modalWelfare" value="${rule?.welfare_item || ""}" />
+      <label>Category</label>
+      <input id="modalCategory" value="${rule?.category || ""}" />
+      <label>Document Type</label>
+      <input id="modalDocType" value="${rule?.doc_type || ""}" />
+      <label>Fields (one per line)</label>
+      <textarea id="modalFields" rows="6">${fieldsStr}</textarea>
+      <label>Notes</label>
+      <textarea id="modalNotes" rows="3">${rule?.notes || ""}</textarea>
+      <div class="modal-actions">
+        <button class="btn-ghost" id="modalCancel">Cancel</button>
+        <button class="btn-primary" id="modalSave">${isEdit ? "Update" : "Create"}</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+
+  overlay.querySelector("#modalCancel").addEventListener("click", () => overlay.remove());
+  overlay.addEventListener("click", (e) => { if (e.target === overlay) overlay.remove(); });
+
+  overlay.querySelector("#modalSave").addEventListener("click", async () => {
+    const fieldNames = overlay.querySelector("#modalFields").value
+      .split("\n")
+      .map((s) => s.trim())
+      .filter(Boolean);
+    const fields = fieldNames.map((name) => ({ name, type: "text" }));
+
+    const body = {
+      welfare_item: overlay.querySelector("#modalWelfare").value,
+      category: overlay.querySelector("#modalCategory").value,
+      doc_type: overlay.querySelector("#modalDocType").value,
+      fields_json: fields,
+      notes: overlay.querySelector("#modalNotes").value,
+    };
+
+    const url = isEdit ? `/api/rules/${rule.id}` : "/api/rules";
+    const method = isEdit ? "PUT" : "POST";
+
+    try {
+      const res = await fetch(url, {
+        method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      if (res.ok) {
+        overlay.remove();
+        showToast(isEdit ? "Rule updated" : "Rule created");
+        loadRulesTable();
+        loadRules(); // refresh dropdown
+      } else {
+        showToast("Save failed");
+      }
+    } catch (e) {
+      showToast("Error: " + e.message);
+    }
+  });
+}
+
+window.editRule = async function (id) {
+  const res = await fetch("/api/rules");
+  if (!res.ok) return;
+  const rules = await res.json();
+  const rule = rules.find((r) => r.id === id);
+  if (rule) showRuleModal(rule);
+};
+
+window.deleteRule = async function (id) {
+  if (!confirm("Delete this rule?")) return;
+  try {
+    const res = await fetch(`/api/rules/${id}`, { method: "DELETE" });
+    if (res.ok) {
+      showToast("Rule deleted");
+      loadRulesTable();
+      loadRules();
+    }
+  } catch (e) {
+    showToast("Error: " + e.message);
+  }
+};
+
+// ── History ──
+
+async function loadHistory() {
+  try {
+    const res = await fetch("/api/results");
+    if (!res.ok) return;
+    const results = await res.json();
+    refs.historyTableBody.innerHTML = "";
+    if (results.length === 0) {
+      refs.historyTableBody.innerHTML = '<div class="row row-history"><div style="grid-column:1/-1;color:var(--muted);text-align:center;">No results yet</div></div>';
+      return;
+    }
+    results.forEach((r) => {
+      const date = r.reviewed_at || r.created_at || "";
+      const dateStr = date ? new Date(date).toLocaleString() : "";
+      const row = document.createElement("div");
+      row.className = "row row-history";
+      row.innerHTML = `
+        <div style="word-break:break-all">${r.filename}</div>
+        <div>${r.detected_type || "—"}</div>
+        <div><span class="status-badge ${r.status}">${r.status}</span></div>
+        <div style="font-size:12px;color:var(--muted)">${dateStr}</div>
+      `;
+      refs.historyTableBody.appendChild(row);
+    });
+  } catch (e) {
+    console.error("Failed to load history:", e);
+  }
+}
 
 // ── Simple markdown → HTML ──
 
