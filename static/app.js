@@ -33,7 +33,6 @@ const refs = {
   addRuleBtn: document.getElementById("addRuleBtn"),
   historyTableBody: document.getElementById("historyTableBody"),
   detailBtn: document.getElementById("detailBtn"),
-  detailProgress: document.getElementById("detailProgress"),
 };
 
 let selectedFile = null;
@@ -94,6 +93,7 @@ function handleFile(file) {
   refs.fileInfo.style.display = "block";
   refs.dropZone.style.display = "none";
   refs.runBtn.disabled = false;
+  refs.detailBtn.disabled = false;
 }
 
 refs.dropZone.addEventListener("click", () => refs.fileInput.click());
@@ -123,6 +123,7 @@ refs.clearFileBtn.addEventListener("click", () => {
   refs.fileInfo.style.display = "none";
   refs.dropZone.style.display = "block";
   refs.runBtn.disabled = true;
+  refs.detailBtn.disabled = true;
 });
 
 // ── Mode switch ──
@@ -277,6 +278,7 @@ refs.runBtn.addEventListener("click", async () => {
 
   // Show progress
   refs.runBtn.disabled = true;
+  refs.detailBtn.disabled = true;
   refs.progressArea.style.display = "block";
   refs.progressFill.className = "progress-fill indeterminate";
   refs.progressText.textContent = "Processing...";
@@ -348,9 +350,6 @@ refs.runBtn.addEventListener("click", async () => {
     allTabIds.forEach((id) => document.getElementById(id).style.display = "none");
     document.getElementById("tabOriginal").style.display = "block";
 
-    // Show Detail Mode button if any fields have ai_value === "no"
-    const hasMissing = (data.extracted_fields || []).some(f => f.ai_value === "no");
-    refs.detailBtn.style.display = hasMissing ? "block" : "none";
 
     showToast("OCR completed successfully");
   } catch (err) {
@@ -360,6 +359,7 @@ refs.runBtn.addEventListener("click", async () => {
     showToast("Error: " + err.message);
   } finally {
     refs.runBtn.disabled = false;
+  refs.detailBtn.disabled = false;
     setTimeout(() => {
       refs.progressArea.style.display = "none";
       refs.progressFill.style.width = "0%";
@@ -370,32 +370,79 @@ refs.runBtn.addEventListener("click", async () => {
 // ── Detail Mode (Qwen3 VLM) ──
 
 refs.detailBtn.addEventListener("click", async () => {
-  if (!selectedFile || !currentResultId) return;
+  console.log("Detail Mode clicked", { selectedFile: !!selectedFile, ruleId: refs.docTypeSelect.value });
+  if (!selectedFile) return;
+
   refs.detailBtn.disabled = true;
-  refs.detailProgress.style.display = "block";
+  refs.runBtn.disabled = true;
+  refs.progressArea.style.display = "block";
+  refs.progressFill.className = "progress-fill indeterminate";
+  refs.progressText.textContent = "Detail Mode processing...";
+  refs.emptyState.style.display = "none";
+  refs.resultsArea.style.display = "none";
 
   const formData = new FormData();
   formData.append("file", selectedFile);
-  formData.append("result_id", currentResultId);
+  formData.append("rule_id", refs.docTypeSelect.value);
 
   try {
-    const res = await fetch("/api/ocr/detail", { method: "POST", body: formData });
-    if (!res.ok) throw new Error((await res.json()).detail || "Detail mode failed");
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 600000); // 10 min timeout
+    const res = await fetch("/api/ocr/detail", { method: "POST", body: formData, signal: controller.signal });
+    clearTimeout(timeoutId);
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ detail: "Server error" }));
+      throw new Error(err.detail || "Detail mode failed");
+    }
+
     const data = await res.json();
+    currentResultId = data.result_id || null;
 
-    // Update fields table with merged results
-    renderFieldsTable(data.fields);
+    refs.progressFill.className = "progress-fill";
+    refs.progressFill.style.width = "100%";
+    refs.progressText.textContent = "Done!";
 
-    // Hide detail button if no more missing fields
-    const stillMissing = (data.fields || []).some(f => f.ai_value === "no");
-    refs.detailBtn.style.display = stillMissing ? "block" : "none";
+    // Render results (same as Run OCR)
+    renderGalleryWithNav(refs.originalGallery, data.original_pages || []);
+    renderGalleryWithNav(refs.layoutGallery, data.layout_images || []);
+    renderFieldsTable(data.extracted_fields || []);
 
-    showToast("Detail mode: " + data.detail_status);
+    if (data.detected_type) {
+      refs.detectedTypeBadge.textContent = "Document: " + data.detected_type;
+      refs.detectedTypeBadge.style.display = "inline-block";
+    } else {
+      refs.detectedTypeBadge.style.display = "none";
+    }
+
+    rawMarkdown = data.markdown || "";
+    refs.markdownRaw.textContent = rawMarkdown;
+    refs.markdownBody.innerHTML = simpleMarkdownToHtml(rawMarkdown);
+
+    refs.cropsGallery.innerHTML = '<p style="color:var(--muted);text-align:center;grid-column:1/-1;">Detail mode: no crops</p>';
+
+    // Show results, switch to fields tab
+    refs.resultsArea.style.display = "block";
+    refs.resultTabs.forEach((t) => t.classList.remove("active"));
+    refs.resultTabs[1].classList.add("active");
+    allTabIds.forEach((id) => document.getElementById(id).style.display = "none");
+    document.getElementById("tabFields").style.display = "block";
+
+    showToast("Detail Mode completed");
   } catch (err) {
-    showToast("Detail mode error: " + err.message);
+    console.error("Detail mode error:", err);
+    refs.progressFill.className = "progress-fill";
+    refs.progressFill.style.width = "0%";
+    refs.progressText.textContent = "Error: " + err.message;
+    showToast("Error: " + err.message);
+    alert("Detail Mode Error: " + err.message);
   } finally {
     refs.detailBtn.disabled = false;
-    refs.detailProgress.style.display = "none";
+    refs.runBtn.disabled = false;
+    setTimeout(() => {
+      refs.progressArea.style.display = "none";
+      refs.progressFill.style.width = "0%";
+    }, 3000);
   }
 });
 

@@ -193,53 +193,40 @@ def pil_to_base64(img) -> str:
 
 
 def qwen3_extract(img: Image.Image, doc_type: str, field_names: list[str]) -> tuple[dict, str]:
-    """Two-step Qwen3 OCR: precise char reading then field extraction.
+    """Single-step Qwen3 OCR: image → JSON field extraction directly.
 
-    Returns (extracted_fields_dict, ocr_text).
+    Returns (extracted_fields_dict, raw_response_text).
     """
     try:
         client = OpenAI(base_url=QWEN3_URL, api_key="dummy")
         preprocessed = preprocess_for_qwen(img)
         img_b64 = pil_to_base64(preprocessed)
 
-        # Step 1: Raw OCR
-        r1 = client.chat.completions.create(
+        fields_list = "\n".join(f"- {name}" for name in field_names)
+        resp = client.chat.completions.create(
             model=QWEN3_MODEL,
             messages=[
-                {"role": "system", "content": "你是精確的OCR系統。逐字辨識，不確定的字用[?]標記。不要猜測、不要補充、不要解釋。"},
+                {"role": "system", "content": "你是精確的繁體中文OCR系統。辨識圖片中所有文字並提取指定欄位。注意區分不同角色（如喜帖中：令媛/令嬡後面是新娘名字，不是母親；鞠躬前是父母名字）。以JSON回覆。"},
                 {"role": "user", "content": [
                     {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{img_b64}"}},
-                    {"type": "text", "text": "請逐字辨識這張圖片中所有可見文字，逐行輸出。只輸出原文。"},
+                    {"type": "text", "text": f"請仔細辨識這張「{doc_type}」文件中的文字，提取以下欄位：\n{fields_list}\n\n以JSON回覆，只回覆JSON。"},
                 ]}
-            ],
-            max_tokens=2048,
-            temperature=0.0,
-        )
-        ocr_text = r1.choices[0].message.content
-
-        # Step 2: Extract fields (text-only, no image)
-        fields_list = "\n".join(f"- {name}" for name in field_names)
-        r2 = client.chat.completions.create(
-            model=QWEN3_MODEL,
-            messages=[
-                {"role": "system", "content": "你是資訊提取助手。從OCR辨識結果中精確提取欄位值。"},
-                {"role": "user", "content": f"以下是一份「{doc_type}」的OCR辨識結果：\n\n{ocr_text}\n\n請提取以下欄位，以JSON回覆：\n{fields_list}\n\n只回覆JSON。"},
             ],
             max_tokens=1024,
             temperature=0.0,
         )
-        raw_json = r2.choices[0].message.content
+        raw = resp.choices[0].message.content
+        # Strip Qwen3 <think>...</think> reasoning blocks
+        raw = re.sub(r"<think>.*?</think>", "", raw, flags=re.DOTALL).strip()
 
-        # Parse JSON from response (handle ```json``` code blocks)
-        json_str = raw_json.strip()
+        # Parse JSON (handle ```json``` wrapper)
+        json_str = raw
         if json_str.startswith("```"):
-            # Remove ```json ... ``` wrapper
             lines = json_str.split("\n")
-            # Drop first line (```json) and last line (```)
             lines = [l for l in lines if not l.strip().startswith("```")]
             json_str = "\n".join(lines)
         extracted = json.loads(json_str)
-        return extracted, ocr_text
+        return extracted, raw
     except Exception as e:
         logging.warning("Qwen3 extraction failed: %s", e)
         return {}, ""
@@ -926,66 +913,79 @@ async def run_ocr(
 # ── Detail OCR endpoint (Qwen3 VLM) ──
 
 @app.post("/api/ocr/detail")
-async def run_detail_ocr(request: Request, file: UploadFile = File(...), result_id: str = Form(...)):
-    """Re-OCR using Qwen3-VL for fields PaddleOCR missed."""
+async def run_detail_ocr(
+    request: Request,
+    file: UploadFile = File(...),
+    rule_id: int = Form(default=0),
+):
+    """Standalone Qwen3-VL OCR — two-step: precise char reading then field extraction."""
     require_auth(request)
 
-    # 1. Load existing result + rule from DB
-    result = db.get_ocr_result(result_id)
-    if not result:
-        raise HTTPException(status_code=404, detail="Result not found")
-
-    rule_id = result.get("rule_id")
     rule = db.get_rule(rule_id) if rule_id else None
     if not rule:
-        raise HTTPException(status_code=400, detail="No rule associated with this result")
+        raise HTTPException(status_code=400, detail="Please select a document type")
 
-    existing_fields = result.get("fields_json", [])
-
-    # 2. Find fields where ai_value == "no"
-    missing_field_names = [f["field"] for f in existing_fields if f.get("ai_value") == "no"]
-    if not missing_field_names:
-        return {"fields": existing_fields, "detail_status": "no_missing_fields", "qwen3_ocr_text": ""}
-
-    # 3. Read uploaded file, convert to PIL Image
     ext = os.path.splitext(file.filename)[1].lower()
-    suffix = ext
-    with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
+    if ext not in SUPPORTED_EXT:
+        raise HTTPException(status_code=400, detail=f"Unsupported file type: {ext}")
+
+    with tempfile.NamedTemporaryFile(suffix=ext, delete=False) as tmp:
         content = await file.read()
         tmp.write(content)
         tmp_path = tmp.name
 
     try:
+        # Load image
         if ext == ".pdf":
-            pages = render_pdf_pages(tmp_path, dpi=PDF_HIGH_DPI)
+            pages = render_pdf_pages(tmp_path)
             img = pages[0] if pages else None
+            original_pages = pages
         else:
             img = Image.open(tmp_path).copy()
+            original_pages = [img]
 
         if img is None:
-            raise HTTPException(status_code=400, detail="Could not read image from file")
+            raise HTTPException(status_code=400, detail="Could not read image")
 
-        # 4. Call qwen3_extract
+        # Get field names from rule
+        field_defs = rule.get("fields_json", [])
+        field_names = [f["name"] for f in field_defs if f.get("type") != "filename"]
+        if not field_names:
+            raise HTTPException(status_code=400, detail="No fields defined for this rule")
+
+        # Run Qwen3 two-step extraction
         doc_type = rule.get("doc_type", "")
-        extracted, ocr_text = qwen3_extract(img, doc_type, missing_field_names)
+        extracted, ocr_text = qwen3_extract(img, doc_type, field_names)
 
         if not extracted and not ocr_text:
-            raise HTTPException(status_code=503, detail="Qwen3 VLM server is not available or returned an error")
+            raise HTTPException(status_code=503, detail="Detail Mode server is not available")
 
-        # 5. Merge: for each field in existing result, if ai_value=="no" and qwen3 has a value, replace it
-        merged_fields = []
-        for f in existing_fields:
-            field_copy = dict(f)
-            if field_copy.get("ai_value") == "no" and field_copy["field"] in extracted:
-                qwen_val = extracted[field_copy["field"]]
-                if qwen_val and str(qwen_val).strip():
-                    field_copy["ai_value"] = str(qwen_val).strip()
-            merged_fields.append(field_copy)
+        # Build fields list
+        fields = [{"field": "檔案名稱", "ai_value": file.filename}]
+        for name in field_names:
+            val = str(extracted.get(name, "no")).strip()
+            if not val or val == "null":
+                val = "no"
+            fields.append({"field": name, "ai_value": val})
 
-        # 6. Update DB result with merged fields
-        db.update_ocr_result(result_id, fields=merged_fields)
+        # Save to DB
+        ocr_result = db.create_ocr_result(
+            filename=file.filename,
+            rule_id=rule_id,
+            detected_type=doc_type,
+            ocr_markdown=ocr_text,
+            fields=fields,
+        )
 
-        return {"fields": merged_fields, "detail_status": "enhanced", "qwen3_ocr_text": ocr_text}
+        return {
+            "result_id": ocr_result["id"],
+            "detected_type": doc_type,
+            "original_pages": [pil_to_data_url(p) for p in original_pages],
+            "markdown": ocr_text,
+            "layout_images": [],
+            "crop_images": [],
+            "extracted_fields": fields,
+        }
     finally:
         os.unlink(tmp_path)
 
