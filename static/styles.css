@@ -607,6 +607,27 @@ button {
   }
 }
 
+/* ── Detail Mode Button ── */
+
+.btn-detail {
+  width: 100%;
+  padding: 11px 12px;
+  font-size: 14px;
+  font-weight: 600;
+  border-radius: 10px;
+  border: 2px solid #6366f1;
+  background: linear-gradient(120deg, #6366f1, #4f46e5);
+  color: white;
+  cursor: pointer;
+  margin-top: 8px;
+  font-family: inherit;
+}
+
+.btn-detail:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
 /* ── Toast ── */
 
 .toast {

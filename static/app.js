@@ -32,6 +32,8 @@ const refs = {
   rulesTableBody: document.getElementById("rulesTableBody"),
   addRuleBtn: document.getElementById("addRuleBtn"),
   historyTableBody: document.getElementById("historyTableBody"),
+  detailBtn: document.getElementById("detailBtn"),
+  detailProgress: document.getElementById("detailProgress"),
 };
 
 let selectedFile = null;
@@ -346,6 +348,10 @@ refs.runBtn.addEventListener("click", async () => {
     allTabIds.forEach((id) => document.getElementById(id).style.display = "none");
     document.getElementById("tabOriginal").style.display = "block";
 
+    // Show Detail Mode button if any fields have ai_value === "no"
+    const hasMissing = (data.extracted_fields || []).some(f => f.ai_value === "no");
+    refs.detailBtn.style.display = hasMissing ? "block" : "none";
+
     showToast("OCR completed successfully");
   } catch (err) {
     refs.progressFill.className = "progress-fill";
@@ -358,6 +364,38 @@ refs.runBtn.addEventListener("click", async () => {
       refs.progressArea.style.display = "none";
       refs.progressFill.style.width = "0%";
     }, 3000);
+  }
+});
+
+// ── Detail Mode (Qwen3 VLM) ──
+
+refs.detailBtn.addEventListener("click", async () => {
+  if (!selectedFile || !currentResultId) return;
+  refs.detailBtn.disabled = true;
+  refs.detailProgress.style.display = "block";
+
+  const formData = new FormData();
+  formData.append("file", selectedFile);
+  formData.append("result_id", currentResultId);
+
+  try {
+    const res = await fetch("/api/ocr/detail", { method: "POST", body: formData });
+    if (!res.ok) throw new Error((await res.json()).detail || "Detail mode failed");
+    const data = await res.json();
+
+    // Update fields table with merged results
+    renderFieldsTable(data.fields);
+
+    // Hide detail button if no more missing fields
+    const stillMissing = (data.fields || []).some(f => f.ai_value === "no");
+    refs.detailBtn.style.display = stillMissing ? "block" : "none";
+
+    showToast("Detail mode: " + data.detail_status);
+  } catch (err) {
+    showToast("Detail mode error: " + err.message);
+  } finally {
+    refs.detailBtn.disabled = false;
+    refs.detailProgress.style.display = "none";
   }
 });
 

@@ -44,6 +44,27 @@ services:
       vllm-server:
         condition: service_healthy
 
+  qwen3-vl-server:
+    image: vllm/vllm-openai:latest
+    container_name: qwen3-vl-server
+    restart: unless-stopped
+    runtime: nvidia
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=1
+    ports:
+      - "8010:8000"
+    volumes:
+      - /home/asiamath/.cache/huggingface:/root/.cache/huggingface
+    shm_size: "16g"
+    command: >
+      --model QuantTrio/Qwen3-VL-32B-Instruct-AWQ
+      --max-model-len 4096
+      --max-num-seqs 2
+      --gpu-memory-utilization 0.9
+      --trust-remote-code
+      --quantization awq
+      --dtype float16
+
   gradio-app:
     image: nvidia/cuda:12.8.0-runtime-ubuntu22.04
     container_name: ocr-gradio-app
