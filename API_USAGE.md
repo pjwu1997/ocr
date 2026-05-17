@@ -1,339 +1,331 @@
-# PaddleOCR-VL + vLLM — API Usage Guide
+# AsiaMath OCR — API Usage Guide
 
-## Quick Start
+Two OCR engines on dual RTX 5090 GPUs, accessible via OpenAI-compatible APIs.
 
-```bash
-# 1. Start the vLLM server
-bash launch_server.sh
+## Services
 
-# 2. Verify it's running
-curl http://localhost:8000/health
+| Service | GPU | Model | Port | Speed | Best for |
+|---------|-----|-------|------|-------|----------|
+| **PaddleOCR** | GPU 0 | PaddleOCR-VL-1.5-0.9B | `8000` | ~2s | Printed text, tables, forms |
+| **Qwen3-VL** | GPU 1 | Qwen3-VL-32B-Instruct-AWQ | `8010` | ~30s | Handwriting, gold text, English docs |
+| **Web UI** | — | Both | `7860` | — | Interactive (login: admin/123) |
 
-# 3. Run batch OCR
-source /home/asiamath/Users/PJ/.venv_5090/bin/activate
-python process_batch_v3.py
+All services auto-restart on reboot via `docker compose`.
+
+```
+GPU 0 (RTX 5090, 30GB)              GPU 1 (RTX 5090, 28GB)
+┌─────────────────────┐             ┌─────────────────────────┐
+│ ocr-vllm-server     │             │ qwen3-vl-server         │
+│ PaddleOCR-VL-1.5    │             │ Qwen3-VL-32B-AWQ        │
+│ vLLM 0.10.2         │             │ vLLM 0.20.2 (Docker)    │
+│ port 8000           │             │ port 8010               │
+└────────┬────────────┘             └────────┬────────────────┘
+         │                                   │
+         └──────────┐       ┌────────────────┘
+                    ▼       ▼
+              ┌─────────────────┐
+              │   ocr-web-app   │
+              │   FastAPI       │
+              │   port 7860     │
+              │                 │
+              │ POST /api/ocr        → PaddleOCR (fast)
+              │ POST /api/ocr/detail → Qwen3 (accurate)
+              │ GET  /api/rules      → rule list
+              │ GET  /api/results    → history
+              └─────────────────┘
 ```
 
 ---
 
-## 1. Server Launch
+## 1. PaddleOCR — Fast OCR (port 8000)
 
-### launch_server.sh
+Uses layout detection + VLM pipeline. Best for printed Chinese documents, tables, forms.
 
-```bash
-bash launch_server.sh          # default port 8000
-bash launch_server.sh 8118     # custom port
-```
-
-Starts a vLLM server hosting `PaddleOCR-VL-0.9B` with batch-optimized parameters:
-
-| Parameter | Value | Description |
-|---|---|---|
-| `gpu-memory-utilization` | 0.9 | 90% VRAM allocated for KV cache |
-| `max-model-len` | 16384 | Max token context per sequence |
-| `max-num-seqs` | 256 | Max concurrent sequences batched per GPU step |
-| `max-num-batched-tokens` | 16384 | Total token budget across all batched sequences |
-
-### Manual launch (equivalent)
-
-```bash
-source /home/asiamath/.venv_vllm/bin/activate
-
-uv run paddleocr genai_server \
-  --model_name PaddleOCR-VL-0.9B \
-  --backend vllm \
-  --port 8000 \
-  --backend_config <(cat <<'EOF'
-gpu-memory-utilization: 0.9
-max-model-len: 16384
-max-num-seqs: 256
-max-num-batched-tokens: 16384
-trust-remote-code: true
-EOF
-)
-```
-
-### Health check
-
-```bash
-curl http://localhost:8000/health
-# {"status":"ok"}
-```
-
----
-
-## 2. Batch Processing (process_batch_v3.py)
-
-### Configuration
-
-Edit the top of `process_batch_v3.py`:
+### Via Web App API (recommended — includes layout detection + field extraction)
 
 ```python
-INPUT_ROOT  = "/path/to/input/pdfs"       # Recursive PDF scan
-OUTPUT_ROOT = "/path/to/output/markdown"   # Mirrors input folder structure
-VLLM_URL    = "http://localhost:8000/v1"   # vLLM server endpoint
-VL_REC_MAX_CONCURRENCY = 16               # Concurrent requests to vLLM
+import requests
+
+# Authenticate
+session = requests.Session()
+session.post("http://localhost:7860/login",
+             data={"username": "admin", "password": "123"})
+
+# Run OCR with field extraction
+with open("document.pdf", "rb") as f:
+    resp = session.post(
+        "http://localhost:7860/api/ocr",
+        files={"file": ("document.pdf", f)},
+        data={"rule_id": 12},  # 12=公文, see Rule IDs below
+        timeout=300,
+    )
+
+data = resp.json()
+print(data["markdown"])           # Full OCR text (markdown)
+print(data["extracted_fields"])   # Structured fields
+# [{"field": "發文者", "ai_value": "臺中市政府經濟發展局"}, ...]
 ```
 
-### Run
-
-```bash
-source /home/asiamath/Users/PJ/.venv_5090/bin/activate
-python process_batch_v3.py
-```
-
-### Features
-
-- **Resume support** — skips files that already have non-empty `.md` output
-- **PDF validation** — pre-checks PDF headers, skips corrupt files
-- **Simplified → Traditional Chinese** conversion via `opencc`
-- **Batch inference** — sends up to `VL_REC_MAX_CONCURRENCY` sub-image requests concurrently to vLLM
-
-### Output
-
-```
-OUTPUT_ROOT/
-├── _log_success.txt       # [HH:MM:SS] filename for each success
-├── _log_error.txt         # [HH:MM:SS] filename -> error message
-├── subfolder1/
-│   ├── exam_paper_1.md
-│   └── exam_paper_2.md
-└── subfolder2/
-    └── exam_paper_3.md
-```
-
-### Tuning VL_REC_MAX_CONCURRENCY
-
-| Value | When to use |
-|---|---|
-| 8 | Low VRAM or small `max-num-seqs` on server |
-| 16 | Default — good balance for RTX 5090 |
-| 32–64 | If GPU utilization is still low (check `nvidia-smi`) |
-
-Rule of thumb: increase until `nvidia-smi` shows ~80%+ GPU utilization, then stop.
-
----
-
-## 3. Python API (Direct Usage)
-
-### Single file OCR
-
-```python
-from paddleocr import PaddleOCRVL
-
-pipeline = PaddleOCRVL(
-    vl_rec_backend="vllm-server",
-    vl_rec_server_url="http://localhost:8000/v1",
-    vl_rec_max_concurrency=16,
-    use_doc_orientation_classify=False,
-    use_doc_unwarping=False,
-    use_chart_recognition=False,
-)
-
-for result in pipeline.predict("exam.pdf"):
-    result.save_to_markdown(save_path="./output")
-```
-
-### Multiple files (list input)
-
-```python
-files = ["doc1.pdf", "doc2.pdf", "doc3.pdf"]
-
-for result in pipeline.predict(files):
-    result.save_to_markdown(save_path="./output")
-```
-
-### Directory input
-
-```python
-for result in pipeline.predict("/path/to/pdf_folder/"):
-    result.save_to_markdown(save_path="./output")
-```
-
-### Streaming with predict_iter
-
-```python
-# Memory-efficient — yields results one at a time
-for result in pipeline.predict_iter("exam.pdf"):
-    print(result.markdown)
-```
-
-### PaddleOCRVL constructor options
-
-```python
-PaddleOCRVL(
-    # --- Backend ---
-    vl_rec_backend="vllm-server",          # "vllm-server" | "native"
-    vl_rec_server_url="http://...:8000/v1",
-    vl_rec_max_concurrency=16,             # concurrent requests to vLLM
-
-    # --- Pre-processing toggles ---
-    use_doc_orientation_classify=False,     # auto-rotate detection
-    use_doc_unwarping=False,               # dewarp curved documents
-    use_chart_recognition=False,           # chart/table recognition
-
-    # --- Layout detection ---
-    layout_detection_model_name="PP-DocLayoutV2",  # default model
-)
-```
-
----
-
-## 4. vLLM OpenAI-Compatible API
-
-The vLLM server exposes an OpenAI-compatible chat completions endpoint. You can call it directly for custom integrations.
-
-### Chat completion with image
-
-```bash
-# Base64 encode an image
-IMG_B64=$(base64 -w0 exam_page.png)
-
-curl -s http://localhost:8000/v1/chat/completions \
-  -H "Content-Type: application/json" \
-  -d "{
-    \"model\": \"PaddleOCR-VL-0.9B\",
-    \"messages\": [{
-      \"role\": \"user\",
-      \"content\": [
-        {\"type\": \"text\", \"text\": \"Perform OCR on this image and return markdown.\"},
-        {\"type\": \"image_url\", \"image_url\": {\"url\": \"data:image/png;base64,${IMG_B64}\"}}
-      ]
-    }],
-    \"max_tokens\": 4096
-  }"
-```
-
-### Python (via openai SDK)
+### Via vLLM API directly (raw VLM, no layout detection)
 
 ```python
 from openai import OpenAI
 import base64
 
-client = OpenAI(base_url="http://localhost:8000/v1", api_key="unused")
+client = OpenAI(base_url="http://localhost:8000/v1", api_key="dummy")
 
-with open("exam_page.png", "rb") as f:
+with open("image.png", "rb") as f:
     img_b64 = base64.b64encode(f.read()).decode()
 
-response = client.chat.completions.create(
-    model="PaddleOCR-VL-0.9B",
+resp = client.chat.completions.create(
+    model="PaddleOCR-VL-1.5-0.9B",
     messages=[{
         "role": "user",
         "content": [
-            {"type": "text", "text": "Perform OCR on this image and return markdown."},
             {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{img_b64}"}},
-        ],
+            {"type": "text", "text": "OCR:"},
+        ]
     }],
     max_tokens=4096,
+    temperature=0.0,
 )
-print(response.choices[0].message.content)
+print(resp.choices[0].message.content)
+```
+
+> **Note:** Direct vLLM calls skip layout detection. Use the web app API for multi-region documents.
+
+---
+
+## 2. Qwen3-VL — Detail Mode (port 8010)
+
+32B general-purpose VLM. Reads entire image, extracts fields via prompt. Best for handwriting, low-contrast text, English documents.
+
+### Via Web App API
+
+```python
+with open("wedding_invitation.jpg", "rb") as f:
+    resp = session.post(
+        "http://localhost:7860/api/ocr/detail",
+        files={"file": ("invitation.jpg", f)},
+        data={"rule_id": 7},   # 7=結婚慶賀金
+        timeout=600,            # Qwen3 is slower
+    )
+
+data = resp.json()
+print(data["extracted_fields"])
+```
+
+### Via vLLM API directly (full prompt control)
+
+```python
+client = OpenAI(base_url="http://localhost:8010/v1", api_key="dummy")
+
+with open("document.jpg", "rb") as f:
+    img_b64 = base64.b64encode(f.read()).decode()
+
+resp = client.chat.completions.create(
+    model="QuantTrio/Qwen3-VL-32B-Instruct-AWQ",
+    messages=[
+        {
+            "role": "system",
+            "content": "你是精確的繁體中文OCR系統。辨識圖片中所有文字並提取指定欄位。以JSON回覆。"
+        },
+        {
+            "role": "user",
+            "content": [
+                {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{img_b64}"}},
+                {"type": "text", "text": "請辨識這張文件中的文字，提取以下欄位：\n- 發文者\n- 發文日期\n- 主旨\n\n以JSON回覆。"},
+            ]
+        }
+    ],
+    max_tokens=2048,
+    temperature=0.0,
+)
+print(resp.choices[0].message.content)
+```
+
+### Prompt templates for common document types
+
+```python
+# Wedding invitation (喜帖)
+prompt = """請從這張喜帖中提取以下欄位：
+- 新郎姓名
+- 新娘姓名（在「令媛」後面，不是母親名字）
+- 宴客日期
+- 餐廳名稱
+- 地址
+- 電話
+以JSON回覆。"""
+
+# Obituary (訃聞)
+prompt = """請從這份訃聞中提取：
+- 亡者姓名
+- 享年
+- 儀式日期
+- 公祭時間
+- 儀式地點
+以JSON回覆。"""
+
+# Invoice (發票)
+prompt = """請從這張發票中提取：
+- 發票號碼
+- 消費日期
+- 買方統編
+- 消費金額
+以JSON回覆。"""
 ```
 
 ---
 
-## 5. FastAPI Service (Docker)
+## 3. Batch Processing
 
-For containerized deployment, use the GPU Docker service.
+### PaddleOCR first, Qwen3 fallback for missing fields
 
-### Build and run
+```python
+import requests
+from pathlib import Path
 
-```bash
-cd /home/asiamath/Users/PJ/ocr_service_gpu
+session = requests.Session()
+session.post("http://localhost:7860/login",
+             data={"username": "admin", "password": "123"})
 
-docker build -t ocr-vllm .
+results = []
+for file_path in sorted(Path("./documents").glob("*.pdf")):
+    with open(file_path, "rb") as f:
+        # Fast pass
+        resp = session.post(
+            "http://localhost:7860/api/ocr",
+            files={"file": (file_path.name, f)},
+            data={"rule_id": 12},
+            timeout=300,
+        )
 
-docker run -d --gpus all \
-    --name ocr_gpu_service \
-    -p 8118:8118 -p 8000:8000 \
-    --shm-size=16g \
-    -v ~/.paddlex:/root/.paddlex \
-    -v ~/.cache/huggingface:/root/.cache/huggingface \
-    ocr-vllm
+    data = resp.json()
+    fields = {f["field"]: f["ai_value"] for f in data["extracted_fields"]}
+    missing = [k for k, v in fields.items() if v == "no"]
+
+    if missing:
+        # Qwen3 fallback
+        with open(file_path, "rb") as f:
+            detail = session.post(
+                "http://localhost:7860/api/ocr/detail",
+                files={"file": (file_path.name, f)},
+                data={"rule_id": 12},
+                timeout=600,
+            )
+        data = detail.json()
+        fields = {f["field"]: f["ai_value"] for f in data["extracted_fields"]}
+
+    results.append({"file": file_path.name, **fields})
+    print(f"{file_path.name}: {len(fields)} fields, {len(missing)} via Qwen3")
 ```
 
-### Endpoints
+### Qwen3 only (all documents through Detail Mode)
 
-| Method | URL | Description |
-|---|---|---|
-| GET | `/health` | `{"status":"ok","pipeline_ready":true}` |
-| GET | `/predict?image_path=/path/to/img.png` | Run OCR on a file inside the container |
-
-### Example
-
-```bash
-# Copy an image into the container
-docker cp exam.png ocr_gpu_service:/tmp/exam.png
-
-# Run OCR
-curl "http://localhost:8118/predict?image_path=/tmp/exam.png"
-```
-
-Response:
-```json
-{
-  "status": "success",
-  "filename": "exam.png",
-  "elapsed_sec": 2.34,
-  "results": ["# Exam Title\n\n1. Question one..."]
-}
+```python
+for file_path in sorted(Path("./documents").glob("*.*")):
+    with open(file_path, "rb") as f:
+        resp = session.post(
+            "http://localhost:7860/api/ocr/detail",
+            files={"file": (file_path.name, f)},
+            data={"rule_id": 7},
+            timeout=600,
+        )
+    data = resp.json()
+    for f in data["extracted_fields"]:
+        print(f"  {f['field']}: {f['ai_value']}")
 ```
 
 ---
 
-## 6. Web UIs
+## 4. Image Preprocessing (optional)
 
-### Gradio visual interface
+For better Qwen3 results on difficult images (gold text, low contrast):
 
-```bash
-python /home/asiamath/Users/PJ/gradio_app.py
-# http://localhost:7861
+```python
+import cv2
+import numpy as np
+from PIL import Image
+
+def preprocess_for_qwen(img_path, target_long_side=1280):
+    """Resize + contrast enhance — optimal for Qwen3-VL."""
+    img = cv2.imread(img_path)
+    h, w = img.shape[:2]
+
+    scale = target_long_side / max(h, w)
+    if abs(scale - 1.0) > 0.05:
+        interp = cv2.INTER_LANCZOS4 if scale > 1 else cv2.INTER_AREA
+        img = cv2.resize(img, (int(w*scale), int(h*scale)), interpolation=interp)
+
+    lab = cv2.cvtColor(img, cv2.COLOR_BGR2LAB)
+    l, a, b = cv2.split(lab)
+    l = cv2.convertScaleAbs(l, alpha=1.5, beta=0)
+    img = cv2.cvtColor(cv2.merge([l, a, b]), cv2.COLOR_LAB2BGR)
+
+    return Image.fromarray(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
 ```
 
-Upload images/PDFs, view side-by-side original + OCR result.
+---
 
-### Batch processing GUI
+## 5. Rule IDs
 
-```bash
-python /home/asiamath/Users/PJ/gui_batch.py
-# http://localhost:9999  (login: asiamath / 123)
+| ID | Category | Document Type |
+|----|----------|---------------|
+| 1 | 接駁車 | 接駁車搭乘登記表 |
+| 2 | 用餐調整表 | 用餐費用調整表 |
+| 3 | 員工子女教育補助金 | 繳費收據 |
+| 4 | 教育獎學金 | 成績單 |
+| 5 | 員工進修補助金 | 繳費收據 |
+| 6 | 清潔打卡資料 | 出勤卡 |
+| 7 | 結婚慶賀金 | 喜帖/結婚證書 |
+| 8 | 喪葬奠儀 | 訃聞/死亡證明 |
+| 9 | 生育慶賀金 | 出生證明 |
+| 10 | 活動請款 | 發票/收據 |
+| 11 | 急難救助金 | 診斷證明 |
+| 12 | 公文分發 | 公文 |
+| 13 | 郵件分發 | 信封 |
+| 14 | 廠商合約 | 特約商合約 |
+| 15 | 矽品特約合約書 | 優惠內容 |
+| 16 | 例行表單 | 巡檢表/體檢表 |
+
+Get full list:
+```python
+rules = session.get("http://localhost:7860/api/rules").json()
+for r in rules:
+    print(f"ID={r['id']} {r['category']} → {r['doc_type']}")
 ```
 
-Concurrent batch processing with throughput metrics.
+---
+
+## 6. Docker Management
+
+```bash
+# Start all services
+docker compose up -d
+
+# Check status
+docker compose ps
+
+# View logs
+docker compose logs -f vllm-server      # PaddleOCR
+docker compose logs -f qwen3-vl-server  # Qwen3
+docker compose logs -f web-app          # Web app
+
+# Restart single service
+docker compose restart web-app
+
+# Stop everything
+docker compose down
+```
 
 ---
 
 ## 7. Troubleshooting
 
-### Server won't start
-
-```bash
-# Check if port is already in use
-lsof -i :8000
-
-# Check GPU availability
-nvidia-smi
-```
-
-### Batch processing is slow
-
-1. Check GPU utilization: `watch -n1 nvidia-smi`
-2. If GPU util < 50%, increase `VL_REC_MAX_CONCURRENCY` in the script
-3. If GPU util is high but throughput is low, increase `max-num-batched-tokens` on the server
-
-### Out of memory
-
-Reduce server parameters:
-```bash
-bash launch_server.sh  # then edit:
-# gpu-memory-utilization: 0.8  (down from 0.9)
-# max-num-seqs: 128            (down from 256)
-# max-model-len: 8192          (down from 16384)
-```
-
-### Corrupt PDF errors
-
-`process_batch_v3.py` pre-validates PDF headers and logs skipped files to `_log_error.txt`. If a file passes validation but still fails, it will be caught and logged without crashing the batch.
-
-### Resume after interruption
-
-Just re-run `python process_batch_v3.py`. It automatically skips files that already have non-empty `.md` output.
+| Problem | Fix |
+|---------|-----|
+| Run OCR fails | Check `docker compose logs vllm-server` — PaddleOCR may need restart |
+| Detail Mode fails | Check `docker compose logs qwen3-vl-server` — Qwen3 takes ~3 min to start |
+| Port conflict | `docker compose down && docker compose up -d --remove-orphans` |
+| GPU OOM | Reduce `max-model-len` in docker-compose.yml |
+| Slow first request | Models need warmup on first inference after start |

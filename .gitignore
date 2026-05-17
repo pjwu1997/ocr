@@ -1,0 +1,28 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+
+# Local runtime
+ocr.db
+ocr.db-*
+*.db-shm
+*.db-wal
+.gradio/
+
+# Editor / IDE / Claude
+.claude/settings.local.json
+.vscode/
+.idea/
+
+# Large test fixtures (kept on disk, not in repo)
+封存/
+
+# Scratch / one-off
+20260428165118499.pdf
+bench_pipeline.py
+bench_vllm_raw.py
+experiment_ocr.py
+experiment_ocr2.py
+experiment_ocr3.py
