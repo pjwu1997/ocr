@@ -607,6 +607,27 @@ button {
   }
 }
 
+/* ── Detail Mode Button ── */
+
+.btn-detail {
+  width: 100%;
+  padding: 11px 12px;
+  font-size: 14px;
+  font-weight: 600;
+  border-radius: 10px;
+  border: 2px solid #6366f1;
+  background: linear-gradient(120deg, #6366f1, #4f46e5);
+  color: white;
+  cursor: pointer;
+  margin-top: 8px;
+  font-family: inherit;
+}
+
+.btn-detail:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
 /* ── Toast ── */
 
 .toast {
@@ -857,7 +878,8 @@ button {
 /* ── Responsive ── */
 
 @media (max-width: 860px) {
-  #singleView {
+  #singleView,
+  #aiocrView {
     grid-template-columns: 1fr;
   }
 
@@ -879,4 +901,153 @@ button {
   .gallery-grid {
     grid-template-columns: 1fr;
   }
+}
+
+/* topbar API Docs anchor (styled like a tab) */
+.tab-btn.tab-link {
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+}
+
+/* ── AIOCR (v1) ── */
+
+#aiocrView {
+  display: none;
+  grid-template-columns: 320px 1fr;
+  gap: 18px;
+}
+#aiocrView.active { display: grid; }
+
+.aiocr-file-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+.aiocr-file-row {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 6px;
+  font-size: 13px;
+}
+.aiocr-file-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.aiocr-file-meta {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.aiocr-job-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 14px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  margin-bottom: 14px;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 12px;
+}
+.aiocr-job-id { color: var(--muted); }
+.aiocr-status {
+  padding: 3px 10px;
+  border-radius: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  font-size: 11px;
+}
+.aiocr-status.status-completed { background: rgba(46, 204, 113, 0.15); color: #2ecc71; }
+.aiocr-status.status-failed    { background: rgba(231, 76, 60, 0.15);  color: #e74c3c; }
+.aiocr-status.status-partial   { background: rgba(241, 196, 15, 0.15); color: #f1c40f; }
+
+.aiocr-doc-card {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  margin-bottom: 16px;
+  overflow: hidden;
+}
+.aiocr-doc-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  padding: 12px 16px;
+  background: rgba(255, 255, 255, 0.03);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+.aiocr-doc-filename { font-weight: 600; }
+.aiocr-doc-id { color: var(--muted); font-family: "IBM Plex Mono", monospace; font-size: 11px; }
+.aiocr-doc-type { text-align: right; }
+.aiocr-doc-typecode { color: var(--muted); font-family: "IBM Plex Mono", monospace; font-size: 11px; margin-top: 4px; }
+
+.aiocr-fields { padding: 6px 0; }
+.aiocr-field-row {
+  display: grid;
+  grid-template-columns: 200px 1fr 130px;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+.aiocr-field-row:last-child { border-bottom: none; }
+.aiocr-field-label { font-weight: 500; }
+.aiocr-field-keyname {
+  color: var(--muted);
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 11px;
+}
+.aiocr-field-empty { color: var(--muted); font-style: italic; }
+.aiocr-normalized {
+  color: #8be9fd;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 12px;
+  margin-top: 2px;
+}
+.aiocr-field-conf { text-align: right; }
+
+.conf-pill {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 600;
+  font-family: "IBM Plex Mono", monospace;
+}
+.conf-pill.conf-high { background: rgba(46, 204, 113, 0.18); color: #2ecc71; }
+.conf-pill.conf-mid  { background: rgba(241, 196, 15, 0.18); color: #f1c40f; }
+.conf-pill.conf-low  { background: rgba(231, 76, 60, 0.18);  color: #e74c3c; }
+
+.aiocr-field-row.conf-low { background: rgba(231, 76, 60, 0.05); }
+
+.needs-review-flag {
+  display: block;
+  margin-top: 4px;
+  font-size: 10px;
+  color: #f1c40f;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.aiocr-warnings {
+  margin-top: 16px;
+  padding: 12px 16px;
+  background: rgba(241, 196, 15, 0.08);
+  border: 1px solid rgba(241, 196, 15, 0.3);
+  border-radius: 8px;
+}
+.aiocr-warnings h4 { margin: 0 0 8px 0; color: #f1c40f; font-size: 13px; }
+.aiocr-warning {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 12px;
+  color: var(--muted);
+  padding: 2px 0;
 }

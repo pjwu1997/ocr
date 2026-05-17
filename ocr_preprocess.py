@@ -49,6 +49,26 @@ def preprocess_for_ocr(img: Image.Image) -> Image.Image:
     return Image.fromarray(cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB))
 
 
+def preprocess_for_qwen(img: Image.Image) -> Image.Image:
+    """Optimal preprocessing for Qwen3-VL: resize to ~1280px + contrast 1.5x.
+    Capped at 1280px long side to fit within Qwen3's 4096 token context."""
+    arr = np.array(img.convert("RGB"))
+    bgr = cv2.cvtColor(arr, cv2.COLOR_RGB2BGR)
+    h, w = bgr.shape[:2]
+    # Resize to 1280px long side (up or down)
+    target = 1280
+    scale = target / max(h, w)
+    if abs(scale - 1.0) > 0.05:
+        interp = cv2.INTER_LANCZOS4 if scale > 1 else cv2.INTER_AREA
+        bgr = cv2.resize(bgr, (int(w * scale), int(h * scale)), interpolation=interp)
+    # Contrast 1.5x on L channel
+    lab = cv2.cvtColor(bgr, cv2.COLOR_BGR2LAB)
+    l, a, b = cv2.split(lab)
+    l = cv2.convertScaleAbs(l, alpha=1.5, beta=0)
+    bgr = cv2.cvtColor(cv2.merge([l, a, b]), cv2.COLOR_LAB2BGR)
+    return Image.fromarray(cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB))
+
+
 def crop_and_preprocess(img: Image.Image, x1: float, y1: float,
                         x2: float, y2: float) -> Image.Image:
     """Crop a region (fractional coordinates 0-1) and preprocess for OCR."""

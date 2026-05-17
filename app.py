@@ -36,11 +36,14 @@ from paddleocr import PaddleOCRVL
 from starlette.middleware.sessions import SessionMiddleware
 
 import db
-from ocr_preprocess import preprocess_for_ocr, PDF_HIGH_DPI
+from openai import OpenAI
+from ocr_preprocess import preprocess_for_ocr, preprocess_for_qwen, PDF_HIGH_DPI
 
 # ===================== Configuration =====================
 
-VLLM_URL = "http://localhost:8000/v1"
+VLLM_URL = "http://localhost:8000/v1"  # legacy PaddleOCR (removed)
+QWEN3_URL = "http://localhost:8010/v1"
+QWEN3_MODEL = "qwen3.5-27b"  # served-model-name from docker-compose qwen-llm-server
 VL_REC_MAX_CONCURRENCY = 16
 SUPPORTED_EXT = (".pdf", ".jpg", ".jpeg", ".png")
 AUTH_USER = "admin"
@@ -62,7 +65,23 @@ print("Pipeline ready.")
 
 # ===================== FastAPI app =====================
 
-app = FastAPI(title="AsiaMath OCR")
+app = FastAPI(
+    title="AsiaMath AIOCR",
+    description=(
+        "LLM-first OCR for ERP welfare-document flows.\n\n"
+        "**Auth:** Login via `POST /login` (form: `username`, `password`) — "
+        "session cookie is required for all `/v1/aiocr/*` endpoints.\n\n"
+        "**Main endpoint:** `POST /v1/aiocr/analyze` — multi-file analyze "
+        "with per-field confidence scoring.\n\n"
+        "See `/v1/aiocr/flows` for the available flow → doctype catalogue."
+    ),
+    version="1.0.0",
+    openapi_tags=[
+        {"name": "aiocr-v1", "description": "Spec-compliant LLM-first OCR (ERP-facing)"},
+        {"name": "auth", "description": "Session login / logout"},
+        {"name": "legacy", "description": "Pre-v1 rule-based endpoints (kept for transition)"},
+    ],
+)
 app.add_middleware(SessionMiddleware, secret_key=secrets.token_hex(32))
 
 STATIC_DIR = os.path.join(os.path.dirname(__file__), "static")
@@ -178,6 +197,55 @@ def pil_to_data_url(img) -> str:
     img.save(buf, format="PNG")
     b64 = base64.b64encode(buf.getvalue()).decode()
     return f"data:image/png;base64,{b64}"
+
+
+def pil_to_base64(img) -> str:
+    """Convert a PIL Image to a raw base64 string (no data URL prefix)."""
+    if isinstance(img, np.ndarray):
+        img = Image.fromarray(img)
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    return base64.b64encode(buf.getvalue()).decode()
+
+
+def qwen3_extract(img: Image.Image, doc_type: str, field_names: list[str]) -> tuple[dict, str]:
+    """Single-step Qwen3 OCR: image → JSON field extraction directly.
+
+    Returns (extracted_fields_dict, raw_response_text).
+    """
+    try:
+        client = OpenAI(base_url=QWEN3_URL, api_key="dummy")
+        preprocessed = preprocess_for_qwen(img)
+        img_b64 = pil_to_base64(preprocessed)
+
+        fields_list = "\n".join(f"- {name}" for name in field_names)
+        resp = client.chat.completions.create(
+            model=QWEN3_MODEL,
+            messages=[
+                {"role": "system", "content": "你是精確的繁體中文OCR系統。辨識圖片中所有文字並提取指定欄位。注意區分不同角色（如喜帖中：令媛/令嬡後面是新娘名字，不是母親；鞠躬前是父母名字）。以JSON回覆。"},
+                {"role": "user", "content": [
+                    {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{img_b64}"}},
+                    {"type": "text", "text": f"請仔細辨識這張「{doc_type}」文件中的文字，提取以下欄位：\n{fields_list}\n\n以JSON回覆，只回覆JSON。"},
+                ]}
+            ],
+            max_tokens=1024,
+            temperature=0.0,
+        )
+        raw = resp.choices[0].message.content
+        # Strip Qwen3 <think>...</think> reasoning blocks
+        raw = re.sub(r"<think>.*?</think>", "", raw, flags=re.DOTALL).strip()
+
+        # Parse JSON (handle ```json``` wrapper)
+        json_str = raw
+        if json_str.startswith("```"):
+            lines = json_str.split("\n")
+            lines = [l for l in lines if not l.strip().startswith("```")]
+            json_str = "\n".join(lines)
+        extracted = json.loads(json_str)
+        return extracted, raw
+    except Exception as e:
+        logging.warning("Qwen3 extraction failed: %s", e)
+        return {}, ""
 
 
 def render_pdf_pages(pdf_path, dpi=150):
@@ -858,7 +926,479 @@ async def run_ocr(
         os.unlink(tmp_path)
 
 
-# ── Rules API ──
+# ── Detail OCR endpoint (Qwen3 VLM) ──
+
+@app.post("/api/ocr/detail")
+async def run_detail_ocr(
+    request: Request,
+    file: UploadFile = File(...),
+    rule_id: int = Form(default=0),
+):
+    """Detail Mode — single-step Qwen3-VL-32B OCR for all fields."""
+    require_auth(request)
+
+    rule = db.get_rule(rule_id) if rule_id else None
+    if not rule:
+        raise HTTPException(status_code=400, detail="Please select a document type")
+
+    ext = os.path.splitext(file.filename)[1].lower()
+    if ext not in SUPPORTED_EXT:
+        raise HTTPException(status_code=400, detail=f"Unsupported file type: {ext}")
+
+    with tempfile.NamedTemporaryFile(suffix=ext, delete=False) as tmp:
+        content = await file.read()
+        tmp.write(content)
+        tmp_path = tmp.name
+
+    try:
+        if ext == ".pdf":
+            pages = render_pdf_pages(tmp_path)
+            img = pages[0] if pages else None
+            original_pages = pages
+        else:
+            img = Image.open(tmp_path).copy()
+            original_pages = [img]
+
+        if img is None:
+            raise HTTPException(status_code=400, detail="Could not read image")
+
+        field_defs = rule.get("fields_json", [])
+        field_names = [f["name"] for f in field_defs if f.get("type") != "filename"]
+        if not field_names:
+            raise HTTPException(status_code=400, detail="No fields defined for this rule")
+
+        doc_type = rule.get("doc_type", "")
+        extracted, ocr_text = qwen3_extract(img, doc_type, field_names)
+
+        if not extracted and not ocr_text:
+            raise HTTPException(status_code=503, detail="Detail Mode server is not available")
+
+        fields = [{"field": "檔案名稱", "ai_value": file.filename}]
+        for name in field_names:
+            val = str(extracted.get(name, "no")).strip()
+            if not val or val == "null":
+                val = "no"
+            fields.append({"field": name, "ai_value": val})
+
+        ocr_result = db.create_ocr_result(
+            filename=file.filename,
+            rule_id=rule_id,
+            detected_type=doc_type,
+            ocr_markdown=ocr_text,
+            fields=fields,
+        )
+
+        return {
+            "result_id": ocr_result["id"],
+            "detected_type": doc_type,
+            "original_pages": [pil_to_data_url(p) for p in original_pages],
+            "markdown": ocr_text,
+            "layout_images": [],
+            "crop_images": [],
+            "extracted_fields": fields,
+        }
+    finally:
+        os.unlink(tmp_path)
+
+
+# =====================================================================
+# AIOCR v1 — Spec-compliant LLM-first OCR endpoint
+# Replaces /api/ocr + /api/ocr/detail with a single unified pipeline
+# =====================================================================
+
+import asyncio
+import uuid as uuid_module
+from datetime import datetime, timezone
+from concurrent.futures import ThreadPoolExecutor
+from pydantic import BaseModel, Field
+from typing import Literal
+from enum import Enum
+import aiocr_spec
+from ocr_preprocess import preprocess_for_ocr
+
+_executor = ThreadPoolExecutor(max_workers=4)
+
+
+# ── Response models (for OpenAPI schema) ──
+
+# Auto-generated from aiocr_spec.DOCTYPES so the enum stays in sync with the spec.
+DocTypeCode = Enum(
+    "DocTypeCode",
+    {code.upper(): code for code in aiocr_spec.DOCTYPES.keys()},
+    type=str,
+)
+FlowKey = Enum(
+    "FlowKey",
+    {key.upper(): key for key in aiocr_spec.FLOWS.keys()},
+    type=str,
+)
+
+
+class AIOCRDocType(BaseModel):
+    code: DocTypeCode = Field(..., description="Doctype identifier — restricted to one of the flow's allowed codes (see /v1/aiocr/flows)")
+    label: str = Field(..., description="Display label in zh-Hant")
+    confidence: float = Field(..., ge=0, le=1, description="Classifier confidence 0..1")
+    evidence_image_url: str = Field("", description="Placeholder URL for evidence crop (v1 demo: empty path returned)")
+
+
+class AIOCRField(BaseModel):
+    key: str = Field(..., description="Stable field identifier")
+    label: str = Field(..., description="Display label in zh-Hant")
+    value: str = Field("", description="Raw extracted value; empty string if not found")
+    normalized_value: str = Field("", description="Normalized form (dates → YYYY-MM-DD); same as value for other types")
+    confidence: float = Field(..., ge=0, le=1, description="Ensemble agreement score: 0.95 (3/3), 0.78 (2/3), 0.55 (1/3), 0.0 (missing)")
+    needs_review: bool = Field(..., description="True when confidence < 0.85 or value is empty")
+    evidence_image_url: str = Field("", description="Placeholder URL for evidence crop")
+
+
+class AIOCRDocument(BaseModel):
+    document_id: str
+    file_id: str = Field(..., description="From request file_manifest, or the filename if omitted")
+    file_name: str
+    doc_type: AIOCRDocType
+    fields: list[AIOCRField]
+
+
+class AIOCRWarning(BaseModel):
+    code: str = Field(..., description="Error code, e.g. UNSUPPORTED_FILE_TYPE, OCR_FAILED")
+    message: str = ""
+
+
+class AIOCRError(BaseModel):
+    code: str
+    message: str = ""
+
+
+class AIOCRResponse(BaseModel):
+    job_id: str = Field(..., description="AIJOB-YYYYMMDD-<uuid8>")
+    status: Literal["completed", "failed", "partial"]
+    case_id: str
+    flow_key: FlowKey = Field(..., description="One of: marriage | funeral | contract | onboarding")
+    documents: list[AIOCRDocument] = []
+    warnings: list[AIOCRWarning] = []
+    error: AIOCRError | None = None
+
+
+class AIOCRFlowDoctype(BaseModel):
+    code: DocTypeCode
+    label: str
+    description: str
+
+
+class AIOCRFlow(BaseModel):
+    label: str
+    doctypes: list[AIOCRFlowDoctype]
+
+
+def _adaptive_threshold(img: "Image.Image") -> "Image.Image":
+    """Preprocessing variant: adaptive threshold (best for handwritten on aged paper)."""
+    import cv2
+    arr = np.array(img.convert("RGB"))
+    gray = cv2.cvtColor(arr, cv2.COLOR_RGB2GRAY)
+    binary = cv2.adaptiveThreshold(
+        gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 31, 10
+    )
+    return Image.fromarray(cv2.cvtColor(binary, cv2.COLOR_GRAY2RGB))
+
+
+def _resize_long_side(img: "Image.Image", target: int = 1280) -> "Image.Image":
+    """Preprocessing variant: resize to target long side (best for Arabic digits)."""
+    w, h = img.size
+    scale = target / max(w, h)
+    if abs(scale - 1.0) < 0.05:
+        return img
+    interp = Image.LANCZOS if scale > 1 else Image.LANCZOS
+    return img.resize((int(w * scale), int(h * scale)), interp)
+
+
+def _qwen_ocr(img: "Image.Image", prompt: str, max_tokens: int = 1024) -> str:
+    """Call Qwen with assistant-prefix trick to suppress chain-of-thought."""
+    client = OpenAI(base_url=QWEN3_URL, api_key="dummy")
+    img_b64 = pil_to_base64(img)
+    try:
+        resp = client.chat.completions.create(
+            model=QWEN3_MODEL,
+            messages=[
+                {"role": "user", "content": [
+                    {"type": "image_url",
+                     "image_url": {"url": f"data:image/png;base64,{img_b64}"}},
+                    {"type": "text", "text": prompt},
+                ]},
+                {"role": "assistant", "content": ""},
+            ],
+            max_tokens=max_tokens,
+            temperature=0.0,
+            extra_body={"add_generation_prompt": False, "continue_final_message": True},
+        )
+        return (resp.choices[0].message.content or "").strip()
+    except Exception as e:
+        logging.warning("Qwen OCR call failed: %s", e)
+        return ""
+
+
+def _parse_json_response(text: str) -> dict:
+    """Parse JSON from Qwen response, stripping markdown fences if present."""
+    text = text.strip()
+    if text.startswith("```"):
+        lines = [l for l in text.split("\n") if not l.strip().startswith("```")]
+        text = "\n".join(lines)
+    text = re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL).strip()
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        m = re.search(r"\{[\s\S]*\}", text)
+        if m:
+            try:
+                return json.loads(m.group())
+            except json.JSONDecodeError:
+                pass
+    return {}
+
+
+def _classify_document(img: "Image.Image", flow_key: str) -> tuple[str, float]:
+    """Ask LLM which doctype this document is. Returns (doctype_code, confidence)."""
+    prompt = aiocr_spec.classification_prompt(flow_key)
+    response = _qwen_ocr(img, prompt, max_tokens=64)
+    allowed = aiocr_spec.FLOWS[flow_key]["doctypes"]
+    response_lower = response.lower().strip()
+    for code in allowed:
+        if code in response_lower:
+            # Single clear answer = high confidence
+            confidence = 0.9 if response_lower.startswith(code) or len(response_lower) < 30 else 0.7
+            return code, confidence
+    # Fallback to first option
+    return allowed[0], 0.3
+
+
+def _extract_fields_from_variant(img: "Image.Image", doctype_code: str) -> dict:
+    """Run extraction prompt on one image variant. Returns {field_key: value}."""
+    prompt = aiocr_spec.extraction_prompt(doctype_code)
+    response = _qwen_ocr(img, prompt, max_tokens=1024)
+    parsed = _parse_json_response(response)
+    return {k: str(v).strip() for k, v in parsed.items() if v}
+
+
+def _ensemble_extract(img: "Image.Image", doctype_code: str) -> dict[str, dict]:
+    """Run multiple preprocessing variants in parallel, score by agreement.
+
+    Returns {field_key: {"value": str, "confidence": float, "alternatives": [str], "sources": [str]}}
+    """
+    variants = {
+        "raw": img,
+        "adaptive": _adaptive_threshold(img),
+        "resize_1280": _resize_long_side(img, 1280),
+    }
+
+    # Run all variants in parallel via executor
+    loop = asyncio.get_event_loop() if False else None
+    results = {}
+    futures = {name: _executor.submit(_extract_fields_from_variant, v_img, doctype_code)
+               for name, v_img in variants.items()}
+    for name, fut in futures.items():
+        try:
+            results[name] = fut.result(timeout=120)
+        except Exception as e:
+            logging.warning("Variant %s failed: %s", name, e)
+            results[name] = {}
+
+    # Aggregate per field
+    dt = aiocr_spec.DOCTYPES[doctype_code]
+    aggregated = {}
+    for field_key in dt["fields"]:
+        candidates = {}  # value → list of variant names
+        for variant_name, fields in results.items():
+            v = fields.get(field_key, "").strip()
+            if v and v.lower() not in ("null", "none", "no", "n/a"):
+                candidates.setdefault(v, []).append(variant_name)
+
+        if not candidates:
+            aggregated[field_key] = {
+                "value": "", "confidence": 0.0, "alternatives": [], "sources": [],
+            }
+            continue
+
+        # Confidence: more variants agree → higher
+        sorted_cands = sorted(candidates.items(), key=lambda x: -len(x[1]))
+        best_value, best_sources = sorted_cands[0]
+        n_agree = len(best_sources)
+        total = len(variants)
+        # 3/3 agree: 0.95, 2/3: 0.75, 1/3: 0.50
+        if n_agree == total:
+            confidence = 0.95
+        elif n_agree >= 2:
+            confidence = 0.78
+        else:
+            confidence = 0.55
+        alternatives = [v for v, _ in sorted_cands[1:]]
+
+        aggregated[field_key] = {
+            "value": best_value,
+            "confidence": confidence,
+            "alternatives": alternatives,
+            "sources": best_sources,
+        }
+    return aggregated
+
+
+def _build_field_response(field_key: str, ext: dict) -> dict:
+    """Build a spec-compliant field response object."""
+    field_def = aiocr_spec.FIELDS.get(field_key, {"label": field_key, "type": "string"})
+    value = ext["value"]
+    normalized = aiocr_spec.normalize_value(value, field_key) if value else ""
+    needs_review = ext["confidence"] < 0.85 or not value
+    return {
+        "key": field_key,
+        "label": field_def["label"],
+        "value": value,
+        "normalized_value": normalized,
+        "confidence": round(ext["confidence"], 2),
+        "needs_review": needs_review,
+        "evidence_image_url": "",  # placeholder for v1
+    }
+
+
+@app.post(
+    "/v1/aiocr/analyze",
+    tags=["aiocr-v1"],
+    response_model=AIOCRResponse,
+    summary="Analyze one or more files in a flow",
+    response_description="Per-file classification + extraction with confidence scoring",
+)
+async def aiocr_analyze(
+    request: Request,
+    files: list[UploadFile] = File(..., description="One or more files (PDF, JPG, PNG)"),
+    case_id: str = Form(..., description="ERP case identifier (any string)"),
+    flow_key: str = Form(..., description="One of: marriage | funeral | contract | onboarding"),
+    file_manifest: str = Form(
+        default="[]",
+        description='JSON array assigning file_ids: [{"file_id":"FILE-001","file_name":"a.pdf"}]. Optional — defaults to using the filename as file_id.',
+    ),
+):
+    """
+    Spec-compliant endpoint: process multiple files in one flow with confidence.
+
+    Each file → one document, independently classified and field-extracted.
+    Returns `documents[]` with doc_type + fields[] (value, normalized_value,
+    confidence ∈ [0,1], needs_review flag).
+    """
+    require_auth(request)
+
+    job_id = f"AIJOB-{datetime.now(timezone.utc).strftime('%Y%m%d')}-{uuid_module.uuid4().hex[:8]}"
+
+    # Validate flow_key
+    if flow_key not in aiocr_spec.FLOWS:
+        return {
+            "job_id": job_id, "status": "failed",
+            "case_id": case_id, "flow_key": flow_key,
+            "error": {"code": "INVALID_FLOW_KEY", "message": f"Unknown flow: {flow_key}"},
+        }
+
+    # Parse file_manifest into {filename: file_id} mapping
+    try:
+        manifest = json.loads(file_manifest) if file_manifest else []
+        manifest_by_name = {m.get("file_name"): m.get("file_id") for m in manifest}
+    except json.JSONDecodeError:
+        manifest_by_name = {}
+
+    documents = []
+    warnings = []
+
+    for upload in files:
+        ext = os.path.splitext(upload.filename or "")[1].lower()
+        if ext not in SUPPORTED_EXT:
+            warnings.append({
+                "code": "UNSUPPORTED_FILE_TYPE",
+                "message": f"{upload.filename}: unsupported extension {ext}",
+            })
+            continue
+
+        # Save to temp + load image
+        with tempfile.NamedTemporaryFile(suffix=ext, delete=False) as tmp:
+            content = await upload.read()
+            tmp.write(content)
+            tmp_path = tmp.name
+
+        try:
+            if ext == ".pdf":
+                pages = render_pdf_pages(tmp_path, dpi=200)
+                if not pages:
+                    warnings.append({"code": "FILE_UNREADABLE", "message": upload.filename})
+                    continue
+                img = pages[0]
+            else:
+                img = Image.open(tmp_path).convert("RGB")
+
+            # Classify
+            doctype_code, type_conf = _classify_document(img, flow_key)
+            doctype_def = aiocr_spec.DOCTYPES[doctype_code]
+
+            # Ensemble extract
+            extracted = _ensemble_extract(img, doctype_code)
+            fields = [_build_field_response(k, v) for k, v in extracted.items()]
+
+            doc_id = f"DOC-{uuid_module.uuid4().hex[:8]}"
+            documents.append({
+                "document_id": doc_id,
+                "file_id": manifest_by_name.get(upload.filename, upload.filename),
+                "file_name": upload.filename,
+                "doc_type": {
+                    "code": doctype_code,
+                    "label": doctype_def["label"],
+                    "confidence": round(type_conf, 2),
+                    "evidence_image_url": f"/evidence/{job_id}/documents/{doc_id}_type.png",
+                },
+                "fields": fields,
+            })
+        except Exception as e:
+            logging.exception("Failed to process %s", upload.filename)
+            warnings.append({"code": "OCR_FAILED", "message": f"{upload.filename}: {e}"})
+        finally:
+            try:
+                os.unlink(tmp_path)
+            except OSError:
+                pass
+
+    status = "completed" if documents else "failed"
+    response = {
+        "job_id": job_id,
+        "status": status,
+        "case_id": case_id,
+        "flow_key": flow_key,
+        "documents": documents,
+        "warnings": warnings,
+    }
+    if status == "failed" and not documents:
+        response["error"] = {"code": "OCR_FAILED", "message": "No documents processed"}
+
+    return response
+
+
+@app.get(
+    "/v1/aiocr/flows",
+    tags=["aiocr-v1"],
+    response_model=dict[str, AIOCRFlow],
+    summary="List flows and allowed doctypes",
+)
+async def aiocr_flows(request: Request):
+    """List available flows + their doctypes (for frontend selectors)."""
+    require_auth(request)
+    return {
+        flow_key: {
+            "label": flow["label"],
+            "doctypes": [
+                {
+                    "code": code,
+                    "label": aiocr_spec.DOCTYPES[code]["label"],
+                    "description": aiocr_spec.DOCTYPES[code]["description"],
+                }
+                for code in flow["doctypes"]
+            ],
+        }
+        for flow_key, flow in aiocr_spec.FLOWS.items()
+    }
+
+
+# ── Rules API (legacy) ──
 
 @app.get("/api/rules")
 async def list_rules(request: Request):

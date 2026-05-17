@@ -1,0 +1,277 @@
+{
+  "marriage": [
+    {
+      "case_id": "marriage_baseline_001",
+      "gt_doctype": "喜帖/結婚證明",
+      "predicted_code": "wedding_invitation",
+      "predicted_label": "喜帖",
+      "type_confidence": 0.9,
+      "elapsed": 4.3,
+      "n_fields": 4,
+      "n_filled": 3,
+      "n_review": 1,
+      "avg_conf": 0.71,
+      "fields": [
+        {
+          "key": "employee_name",
+          "label": "員工姓名",
+          "value": "王小明",
+          "normalized_value": "王小明",
+          "confidence": 0.95,
+          "needs_review": false,
+          "evidence_image_url": ""
+        },
+        {
+          "key": "spouse_name",
+          "label": "配偶姓名",
+          "value": "林小雅",
+          "normalized_value": "林小雅",
+          "confidence": 0.95,
+          "needs_review": false,
+          "evidence_image_url": ""
+        },
+        {
+          "key": "banquet_date",
+          "label": "宴客日期",
+          "value": "2026-01-18",
+          "normalized_value": "2026-01-18",
+          "confidence": 0.95,
+          "needs_review": false,
+          "evidence_image_url": ""
+        },
+        {
+          "key": "document_issue_date",
+          "label": "文件核發日",
+          "value": "",
+          "normalized_value": "",
+          "confidence": 0.0,
+          "needs_review": true,
+          "evidence_image_url": ""
+        }
+      ],
+      "match": "match"
+    }
+  ],
+  "funeral": [
+    {
+      "case_id": "funeral_baseline_001",
+      "gt_doctype": "訃聞",
+      "predicted_code": "obituary",
+      "predicted_label": "訃聞",
+      "type_confidence": 0.9,
+      "elapsed": 4.9,
+      "n_fields": 5,
+      "n_filled": 5,
+      "n_review": 3,
+      "avg_conf": 0.85,
+      "fields": [
+        {
+          "key": "deceased_name",
+          "label": "亡者姓名",
+          "value": "陳美玉",
+          "normalized_value": "陳美玉",
+          "confidence": 0.95,
+          "needs_review": false,
+          "evidence_image_url": ""
+        },
+        {
+          "key": "funeral_date",
+          "label": "儀式日期",
+          "value": "2026-02-08",
+          "normalized_value": "2026-02-08",
+          "confidence": 0.95,
+          "needs_review": false,
+          "evidence_image_url": ""
+        },
+        {
+          "key": "funeral_location",
+          "label": "儀式地點",
+          "value": "台中市北區安和會館（台中市北區太原路三段二四六號）",
+          "normalized_value": "台中市北區安和會館（台中市北區太原路三段二四六號）",
+          "confidence": 0.78,
+          "needs_review": true,
+          "evidence_image_url": ""
+        },
+        {
+          "key": "employee_name",
+          "label": "員工姓名",
+          "value": "陳明德",
+          "normalized_value": "陳明德",
+          "confidence": 0.78,
+          "needs_review": true,
+          "evidence_image_url": ""
+        },
+        {
+          "key": "relationship",
+          "label": "亡者關係",
+          "value": "子",
+          "normalized_value": "子",
+          "confidence": 0.78,
+          "needs_review": true,
+          "evidence_image_url": ""
+        }
+      ],
+      "match": "match"
+    }
+  ],
+  "contract": [
+    {
+      "case_id": "contract_baseline_001",
+      "gt_doctype": "手寫合約",
+      "predicted_code": "handwritten_contract",
+      "predicted_label": "手寫合約主文件",
+      "type_confidence": 0.9,
+      "elapsed": 15.6,
+      "n_fields": 12,
+      "n_filled": 11,
+      "n_review": 3,
+      "avg_conf": 0.84,
+      "fields": [
+        {
+          "key": "contract_title",
+          "label": "文件標題",
+          "value": "清潔服務合約",
+          "normalized_value": "清潔服務合約",
+          "confidence": 0.95,
+          "needs_review": false,
+          "evidence_image_url": ""
+        },
+        {
+          "key": "party_a_name",
+          "label": "甲方名稱",
+          "value": "安和科技股份有限公司",
+          "normalized_value": "安和科技股份有限公司",
+          "confidence": 0.95,
+          "needs_review": false,
+          "evidence_image_url": ""
+        },
+        {
+          "key": "party_b_name",
+          "label": "乙方名稱",
+          "value": "明新清潔服務行",
+          "normalized_value": "明新清潔服務行",
+          "confidence": 0.95,
+          "needs_review": false,
+          "evidence_image_url": ""
+        },
+        {
+          "key": "contract_no",
+          "label": "合約編號",
+          "value": "",
+          "normalized_value": "",
+          "confidence": 0.0,
+          "needs_review": true,
+          "evidence_image_url": ""
+        },
+        {
+          "key": "effective_date",
+          "label": "生效日期",
+          "value": "2026-03-28",
+          "normalized_value": "2026-03-28",
+          "confidence": 0.95,
+          "needs_review": false,
+          "evidence_image_url": ""
+        },
+        {
+          "key": "start_date",
+          "label": "履約起日",
+          "value": "2026-04-01",
+          "normalized_value": "2026-04-01",
+          "confidence": 0.95,
+          "needs_review": false,
+          "evidence_image_url": ""
+        },
+        {
+          "key": "end_date",
+          "label": "履約迄日",
+          "value": "2027-03-31",
+          "normalized_value": "2027-03-31",
+          "confidence": 0.95,
+          "needs_review": false,
+          "evidence_image_url": ""
+        },
+        {
+          "key": "service_scope",
+          "label": "服務 / 履約內容",
+          "value": "每週三進行辦公區清潔與巡檢。",
+          "normalized_value": "每週三進行辦公區清潔與巡檢。",
+          "confidence": 0.95,
+          "needs_review": false,
+          "evidence_image_url": ""
+        },
+        {
+          "key": "amount",
+          "label": "金額",
+          "value": "每月新台幣 16,000 元整",
+          "normalized_value": "每月新台幣 16,000 元整",
+          "confidence": 0.78,
+          "needs_review": true,
+          "evidence_image_url": ""
+        },
+        {
+          "key": "payment_terms",
+          "label": "付款條件",
+          "value": "每月月底前請款，30日內匯款完成。",
+          "normalized_value": "每月月底前請款，30日內匯款完成。",
+          "confidence": 0.95,
+          "needs_review": false,
+          "evidence_image_url": ""
+        },
+        {
+          "key": "handwritten_text",
+          "label": "手寫全文",
+          "value": "清潔服務合約\n\n一、合約名稱：清潔服務合約\n二、立約人：\n甲方：安和科技股份有限公司（虛構）\n乙方：明新清潔服務行（虛構）\n三、合約期間：2026年4月1日至2027年3月31日\n四、服務內容：每週三進行辦公區清潔與巡檢。\n五、付款方式：每月月底前請款，30日內匯款完成。\n六、金額：每月新台幣 16,000 元整（未稅）\n七、其他約定事項：\n1. 乙方應指派專人負責，若遇突發狀況需另行調整，應提前告知甲方並取得同意。\n2. 如因乙方原因造成財物損壞，乙方應負責賠償。\n3. 本合約未盡事宜，雙方得以書面協議補充之。\n4. 本合約一式兩份，雙方各執一份為憑。\n備註：若遇連續假日則順延一天服務，如需增加特殊清潔項目，另行報價（例如地毯清洗、玻璃外牆等）。\n八、聯絡人：林怡君 電話：0912-345678\n九、立約人簽章：\n甲方代表：陳志明（簽章） 乙方代表：吳志強（簽章）\n十、立約日期：2026年3月28日",
+          "normalized_value": "清潔服務合約\n\n一、合約名稱：清潔服務合約\n二、立約人：\n甲方：安和科技股份有限公司（虛構）\n乙方：明新清潔服務行（虛構）\n三、合約期間：2026年4月1日至2027年3月31日\n四、服務內容：每週三進行辦公區清潔與巡檢。\n五、付款方式：每月月底前請款，30日內匯款完成。\n六、金額：每月新台幣 16,000 元整（未稅）\n七、其他約定事項：\n1. 乙方應指派專人負責，若遇突發狀況需另行調整，應提前告知甲方並取得同意。\n2. 如因乙方原因造成財物損壞，乙方應負責賠償。\n3. 本合約未盡事宜，雙方得以書面協議補充之。\n4. 本合約一式兩份，雙方各執一份為憑。\n備註：若遇連續假日則順延一天服務，如需增加特殊清潔項目，另行報價（例如地毯清洗、玻璃外牆等）。\n八、聯絡人：林怡君 電話：0912-345678\n九、立約人簽章：\n甲方代表：陳志明（簽章） 乙方代表：吳志強（簽章）\n十、立約日期：2026年3月28日",
+          "confidence": 0.78,
+          "needs_review": true,
+          "evidence_image_url": ""
+        },
+        {
+          "key": "signature_or_stamp_present",
+          "label": "是否簽名 / 用印",
+          "value": "True",
+          "normalized_value": "True",
+          "confidence": 0.95,
+          "needs_review": false,
+          "evidence_image_url": ""
+        }
+      ],
+      "match": "match"
+    }
+  ],
+  "onboarding": [
+    {
+      "case_id": "onboarding_baseline_001",
+      "gt_doctype": "體檢資料",
+      "predicted_code": "health_check_report",
+      "predicted_label": "體檢報告",
+      "type_confidence": 0.9,
+      "elapsed": 3.7,
+      "n_fields": 2,
+      "n_filled": 2,
+      "n_review": 0,
+      "avg_conf": 0.95,
+      "fields": [
+        {
+          "key": "candidate_name",
+          "label": "面試者姓名",
+          "value": "林怡君",
+          "normalized_value": "林怡君",
+          "confidence": 0.95,
+          "needs_review": false,
+          "evidence_image_url": ""
+        },
+        {
+          "key": "health_check_date",
+          "label": "體檢日期",
+          "value": "2026-03-20",
+          "normalized_value": "2026-03-20",
+          "confidence": 0.95,
+          "needs_review": false,
+          "evidence_image_url": ""
+        }
+      ],
+      "match": "miss"
+    }
+  ]
+}

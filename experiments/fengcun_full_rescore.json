@@ -1,0 +1,584 @@
+{
+  "verdicts": [
+    {
+      "flow": "marriage",
+      "case_id": "marriage_case_004",
+      "gt": "關係證明",
+      "pred_label": "戶口名簿 / 戶籍謄本",
+      "pred_code": "household_registration_marriage",
+      "judge_yes": false,
+      "judge_raw": "no"
+    },
+    {
+      "flow": "marriage",
+      "case_id": "marriage_case_006",
+      "gt": "結婚慶賀金混合文件",
+      "pred_label": "喜帖",
+      "pred_code": "wedding_invitation",
+      "judge_yes": false,
+      "judge_raw": "no"
+    },
+    {
+      "flow": "marriage",
+      "case_id": "marriage_case_007",
+      "gt": "喜帖與申請便條",
+      "pred_label": "補助申請表",
+      "pred_code": "benefit_application_form",
+      "judge_yes": false,
+      "judge_raw": "no"
+    },
+    {
+      "flow": "marriage",
+      "case_id": "marriage_case_009",
+      "gt": "關係證明",
+      "pred_label": "戶口名簿 / 戶籍謄本",
+      "pred_code": "household_registration_marriage",
+      "judge_yes": false,
+      "judge_raw": "no"
+    },
+    {
+      "flow": "marriage",
+      "case_id": "marriage_case_011",
+      "gt": "結婚慶賀金混合文件",
+      "pred_label": "喜帖",
+      "pred_code": "wedding_invitation",
+      "judge_yes": false,
+      "judge_raw": "no"
+    },
+    {
+      "flow": "marriage",
+      "case_id": "marriage_case_012",
+      "gt": "結婚慶賀金申請頁",
+      "pred_label": "補助申請表",
+      "pred_code": "benefit_application_form",
+      "judge_yes": false,
+      "judge_raw": "no"
+    },
+    {
+      "flow": "marriage",
+      "case_id": "marriage_case_013",
+      "gt": "喜帖與申請便條",
+      "pred_label": "補助申請表",
+      "pred_code": "benefit_application_form",
+      "judge_yes": false,
+      "judge_raw": "no"
+    },
+    {
+      "flow": "marriage",
+      "case_id": "marriage_case_016",
+      "gt": "結婚慶賀金審核頁",
+      "pred_label": "補助申請表",
+      "pred_code": "benefit_application_form",
+      "judge_yes": false,
+      "judge_raw": "no"
+    },
+    {
+      "flow": "marriage",
+      "case_id": "marriage_case_017",
+      "gt": "結婚證明",
+      "pred_label": "補助申請表",
+      "pred_code": "benefit_application_form",
+      "judge_yes": false,
+      "judge_raw": "no"
+    },
+    {
+      "flow": "marriage",
+      "case_id": "marriage_case_018",
+      "gt": "結婚慶賀金申請頁",
+      "pred_label": "補助申請表",
+      "pred_code": "benefit_application_form",
+      "judge_yes": false,
+      "judge_raw": "no"
+    },
+    {
+      "flow": "marriage",
+      "case_id": "marriage_case_020",
+      "gt": "結婚日期證明",
+      "pred_label": "結婚證書 / 結婚證明",
+      "pred_code": "marriage_certificate",
+      "judge_yes": false,
+      "judge_raw": "no"
+    },
+    {
+      "flow": "marriage",
+      "case_id": "marriage_case_022",
+      "gt": "結婚慶賀金附件清單",
+      "pred_label": "補助申請表",
+      "pred_code": "benefit_application_form",
+      "judge_yes": false,
+      "judge_raw": "no"
+    },
+    {
+      "flow": "marriage",
+      "case_id": "marriage_case_023",
+      "gt": "結婚慶賀金混合文件",
+      "pred_label": "喜帖",
+      "pred_code": "wedding_invitation",
+      "judge_yes": false,
+      "judge_raw": "no"
+    },
+    {
+      "flow": "marriage",
+      "case_id": "marriage_case_024",
+      "gt": "結婚慶賀金封面頁",
+      "pred_label": "補助申請表",
+      "pred_code": "benefit_application_form",
+      "judge_yes": false,
+      "judge_raw": "no"
+    },
+    {
+      "flow": "marriage",
+      "case_id": "marriage_case_028",
+      "gt": "結婚慶賀金審核頁",
+      "pred_label": "補助申請表",
+      "pred_code": "benefit_application_form",
+      "judge_yes": false,
+      "judge_raw": "no"
+    },
+    {
+      "flow": "marriage",
+      "case_id": "marriage_case_029",
+      "gt": "結婚慶賀金申請頁",
+      "pred_label": "補助申請表",
+      "pred_code": "benefit_application_form",
+      "judge_yes": false,
+      "judge_raw": "no"
+    },
+    {
+      "flow": "marriage",
+      "case_id": "marriage_case_030",
+      "gt": "結婚慶賀金混合文件",
+      "pred_label": "補助申請表",
+      "pred_code": "benefit_application_form",
+      "judge_yes": false,
+      "judge_raw": "no"
+    },
+    {
+      "flow": "funeral",
+      "case_id": "funeral_case_006",
+      "gt": "喪葬奠儀混合文件",
+      "pred_label": "申請表",
+      "pred_code": "funeral_application_form",
+      "judge_yes": false,
+      "judge_raw": "no"
+    },
+    {
+      "flow": "funeral",
+      "case_id": "funeral_case_007",
+      "gt": "訃聞",
+      "pred_label": "申請表",
+      "pred_code": "funeral_application_form",
+      "judge_yes": false,
+      "judge_raw": "no"
+    },
+    {
+      "flow": "funeral",
+      "case_id": "funeral_case_008",
+      "gt": "死亡日期證明",
+      "pred_label": "死亡證明書 / 死亡診斷證明",
+      "pred_code": "death_certificate",
+      "judge_yes": false,
+      "judge_raw": "no"
+    },
+    {
+      "flow": "funeral",
+      "case_id": "funeral_case_009",
+      "gt": "關係證明",
+      "pred_label": "申請表",
+      "pred_code": "funeral_application_form",
+      "judge_yes": false,
+      "judge_raw": "no"
+    },
+    {
+      "flow": "funeral",
+      "case_id": "funeral_case_010",
+      "gt": "訃聞",
+      "pred_label": "申請表",
+      "pred_code": "funeral_application_form",
+      "judge_yes": false,
+      "judge_raw": "no"
+    },
+    {
+      "flow": "funeral",
+      "case_id": "funeral_case_011",
+      "gt": "喪葬奠儀混合文件",
+      "pred_label": "訃聞",
+      "pred_code": "obituary",
+      "judge_yes": false,
+      "judge_raw": "no"
+    },
+    {
+      "flow": "funeral",
+      "case_id": "funeral_case_012",
+      "gt": "喪葬奠儀申請頁",
+      "pred_label": "申請表",
+      "pred_code": "funeral_application_form",
+      "judge_yes": true,
+      "judge_raw": "yes"
+    },
+    {
+      "flow": "funeral",
+      "case_id": "funeral_case_013",
+      "gt": "訃聞",
+      "pred_label": "申請表",
+      "pred_code": "funeral_application_form",
+      "judge_yes": false,
+      "judge_raw": "no"
+    },
+    {
+      "flow": "funeral",
+      "case_id": "funeral_case_014",
+      "gt": "死亡日期說明",
+      "pred_label": "死亡證明書 / 死亡診斷證明",
+      "pred_code": "death_certificate",
+      "judge_yes": false,
+      "judge_raw": "no"
+    },
+    {
+      "flow": "funeral",
+      "case_id": "funeral_case_015",
+      "gt": "關係證明",
+      "pred_label": "申請表",
+      "pred_code": "funeral_application_form",
+      "judge_yes": false,
+      "judge_raw": "no"
+    },
+    {
+      "flow": "funeral",
+      "case_id": "funeral_case_017",
+      "gt": "喪葬奠儀混合文件",
+      "pred_label": "訃聞",
+      "pred_code": "obituary",
+      "judge_yes": false,
+      "judge_raw": "no"
+    },
+    {
+      "flow": "funeral",
+      "case_id": "funeral_case_018",
+      "gt": "喪葬奠儀申請頁",
+      "pred_label": "申請表",
+      "pred_code": "funeral_application_form",
+      "judge_yes": true,
+      "judge_raw": "yes"
+    },
+    {
+      "flow": "funeral",
+      "case_id": "funeral_case_020",
+      "gt": "死亡日期說明",
+      "pred_label": "申請表",
+      "pred_code": "funeral_application_form",
+      "judge_yes": false,
+      "judge_raw": "no"
+    },
+    {
+      "flow": "funeral",
+      "case_id": "funeral_case_022",
+      "gt": "訃聞",
+      "pred_label": "申請表",
+      "pred_code": "funeral_application_form",
+      "judge_yes": false,
+      "judge_raw": "no"
+    },
+    {
+      "flow": "funeral",
+      "case_id": "funeral_case_023",
+      "gt": "喪葬奠儀混合文件",
+      "pred_label": "申請表",
+      "pred_code": "funeral_application_form",
+      "judge_yes": false,
+      "judge_raw": "no"
+    },
+    {
+      "flow": "funeral",
+      "case_id": "funeral_case_024",
+      "gt": "喪葬奠儀申請頁",
+      "pred_label": "申請表",
+      "pred_code": "funeral_application_form",
+      "judge_yes": true,
+      "judge_raw": "yes"
+    },
+    {
+      "flow": "funeral",
+      "case_id": "funeral_case_026",
+      "gt": "死亡日期說明",
+      "pred_label": "申請表",
+      "pred_code": "funeral_application_form",
+      "judge_yes": false,
+      "judge_raw": "no"
+    },
+    {
+      "flow": "funeral",
+      "case_id": "funeral_case_029",
+      "gt": "喪葬奠儀混合文件",
+      "pred_label": "申請表",
+      "pred_code": "funeral_application_form",
+      "judge_yes": false,
+      "judge_raw": "no"
+    },
+    {
+      "flow": "funeral",
+      "case_id": "funeral_case_030",
+      "gt": "喪葬奠儀申請頁",
+      "pred_label": "申請表",
+      "pred_code": "funeral_application_form",
+      "judge_yes": true,
+      "judge_raw": "yes"
+    },
+    {
+      "flow": "contract",
+      "case_id": "contract_case_006",
+      "gt": "手寫合約附件",
+      "pred_label": "手寫合約主文件",
+      "pred_code": "handwritten_contract",
+      "judge_yes": false,
+      "judge_raw": "no"
+    },
+    {
+      "flow": "contract",
+      "case_id": "contract_case_012",
+      "gt": "手寫合約與修正便條",
+      "pred_label": "手寫合約主文件",
+      "pred_code": "handwritten_contract",
+      "judge_yes": false,
+      "judge_raw": "no"
+    },
+    {
+      "flow": "contract",
+      "case_id": "contract_case_018",
+      "gt": "手寫合約與更正便條",
+      "pred_label": "手寫合約主文件",
+      "pred_code": "handwritten_contract",
+      "judge_yes": false,
+      "judge_raw": "no"
+    },
+    {
+      "flow": "contract",
+      "case_id": "contract_case_024",
+      "gt": "手寫合約與修正便條",
+      "pred_label": "手寫合約主文件",
+      "pred_code": "handwritten_contract",
+      "judge_yes": false,
+      "judge_raw": "no"
+    },
+    {
+      "flow": "contract",
+      "case_id": "contract_case_029",
+      "gt": "手寫合約附件",
+      "pred_label": "手寫合約主文件",
+      "pred_code": "handwritten_contract",
+      "judge_yes": false,
+      "judge_raw": "no"
+    },
+    {
+      "flow": "contract",
+      "case_id": "contract_case_030",
+      "gt": "手寫合約與更正便條",
+      "pred_label": "手寫合約主文件",
+      "pred_code": "handwritten_contract",
+      "judge_yes": false,
+      "judge_raw": "no"
+    },
+    {
+      "flow": "onboarding",
+      "case_id": "onboarding_baseline_001",
+      "gt": "體檢資料",
+      "pred_label": "體檢報告",
+      "pred_code": "health_check_report",
+      "judge_yes": true,
+      "judge_raw": "yes"
+    },
+    {
+      "flow": "onboarding",
+      "case_id": "onboarding_case_002",
+      "gt": "體檢資料",
+      "pred_label": "體檢報告",
+      "pred_code": "health_check_report",
+      "judge_yes": true,
+      "judge_raw": "yes"
+    },
+    {
+      "flow": "onboarding",
+      "case_id": "onboarding_case_003",
+      "gt": "銀行帳戶影本",
+      "pred_label": "存摺封面 / 薪轉帳戶",
+      "pred_code": "bank_account_copy",
+      "judge_yes": false,
+      "judge_raw": "no"
+    },
+    {
+      "flow": "onboarding",
+      "case_id": "onboarding_case_006",
+      "gt": "到職文件清單",
+      "pred_label": "人事基本資料表 / 報到表",
+      "pred_code": "onboarding_form",
+      "judge_yes": false,
+      "judge_raw": "no"
+    },
+    {
+      "flow": "onboarding",
+      "case_id": "onboarding_case_007",
+      "gt": "體檢資料",
+      "pred_label": "體檢報告",
+      "pred_code": "health_check_report",
+      "judge_yes": true,
+      "judge_raw": "yes"
+    },
+    {
+      "flow": "onboarding",
+      "case_id": "onboarding_case_008",
+      "gt": "銀行帳戶影本",
+      "pred_label": "存摺封面 / 薪轉帳戶",
+      "pred_code": "bank_account_copy",
+      "judge_yes": false,
+      "judge_raw": "no"
+    },
+    {
+      "flow": "onboarding",
+      "case_id": "onboarding_case_011",
+      "gt": "到職文件清單",
+      "pred_label": "人事基本資料表 / 報到表",
+      "pred_code": "onboarding_form",
+      "judge_yes": false,
+      "judge_raw": "no"
+    },
+    {
+      "flow": "onboarding",
+      "case_id": "onboarding_case_012",
+      "gt": "到職文件混合包",
+      "pred_label": "人事基本資料表 / 報到表",
+      "pred_code": "onboarding_form",
+      "judge_yes": false,
+      "judge_raw": "no"
+    },
+    {
+      "flow": "onboarding",
+      "case_id": "onboarding_case_013",
+      "gt": "體檢資料",
+      "pred_label": "體檢報告",
+      "pred_code": "health_check_report",
+      "judge_yes": true,
+      "judge_raw": "yes"
+    },
+    {
+      "flow": "onboarding",
+      "case_id": "onboarding_case_014",
+      "gt": "銀行帳戶影本",
+      "pred_label": "存摺封面 / 薪轉帳戶",
+      "pred_code": "bank_account_copy",
+      "judge_yes": false,
+      "judge_raw": "no"
+    },
+    {
+      "flow": "onboarding",
+      "case_id": "onboarding_case_017",
+      "gt": "到職文件清單",
+      "pred_label": "人事基本資料表 / 報到表",
+      "pred_code": "onboarding_form",
+      "judge_yes": false,
+      "judge_raw": "no"
+    },
+    {
+      "flow": "onboarding",
+      "case_id": "onboarding_case_018",
+      "gt": "到職文件混合包",
+      "pred_label": "人事基本資料表 / 報到表",
+      "pred_code": "onboarding_form",
+      "judge_yes": false,
+      "judge_raw": "no"
+    },
+    {
+      "flow": "onboarding",
+      "case_id": "onboarding_case_019",
+      "gt": "體檢資料",
+      "pred_label": "體檢報告",
+      "pred_code": "health_check_report",
+      "judge_yes": true,
+      "judge_raw": "yes"
+    },
+    {
+      "flow": "onboarding",
+      "case_id": "onboarding_case_020",
+      "gt": "銀行帳戶影本",
+      "pred_label": "存摺封面 / 薪轉帳戶",
+      "pred_code": "bank_account_copy",
+      "judge_yes": false,
+      "judge_raw": "no"
+    },
+    {
+      "flow": "onboarding",
+      "case_id": "onboarding_case_023",
+      "gt": "到職文件清單",
+      "pred_label": "人事基本資料表 / 報到表",
+      "pred_code": "onboarding_form",
+      "judge_yes": false,
+      "judge_raw": "no"
+    },
+    {
+      "flow": "onboarding",
+      "case_id": "onboarding_case_024",
+      "gt": "到職文件混合包",
+      "pred_label": "人事基本資料表 / 報到表",
+      "pred_code": "onboarding_form",
+      "judge_yes": false,
+      "judge_raw": "no"
+    },
+    {
+      "flow": "onboarding",
+      "case_id": "onboarding_case_025",
+      "gt": "體檢資料",
+      "pred_label": "體檢報告",
+      "pred_code": "health_check_report",
+      "judge_yes": true,
+      "judge_raw": "yes"
+    },
+    {
+      "flow": "onboarding",
+      "case_id": "onboarding_case_026",
+      "gt": "銀行帳戶影本",
+      "pred_label": "存摺封面 / 薪轉帳戶",
+      "pred_code": "bank_account_copy",
+      "judge_yes": false,
+      "judge_raw": "no"
+    },
+    {
+      "flow": "onboarding",
+      "case_id": "onboarding_case_029",
+      "gt": "到職文件清單",
+      "pred_label": "人事基本資料表 / 報到表",
+      "pred_code": "onboarding_form",
+      "judge_yes": false,
+      "judge_raw": "no"
+    },
+    {
+      "flow": "onboarding",
+      "case_id": "onboarding_case_030",
+      "gt": "到職文件混合包",
+      "pred_label": "人事基本資料表 / 報到表",
+      "pred_code": "onboarding_form",
+      "judge_yes": false,
+      "judge_raw": "no"
+    }
+  ],
+  "summary": {
+    "marriage": {
+      "total": 30,
+      "strict_match": 13,
+      "semantic_match": 13
+    },
+    "funeral": {
+      "total": 30,
+      "strict_match": 11,
+      "semantic_match": 15
+    },
+    "contract": {
+      "total": 30,
+      "strict_match": 24,
+      "semantic_match": 24
+    },
+    "onboarding": {
+      "total": 30,
+      "strict_match": 10,
+      "semantic_match": 16
+    }
+  }
+}

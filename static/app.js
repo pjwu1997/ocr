@@ -32,6 +32,7 @@ const refs = {
   rulesTableBody: document.getElementById("rulesTableBody"),
   addRuleBtn: document.getElementById("addRuleBtn"),
   historyTableBody: document.getElementById("historyTableBody"),
+  detailBtn: document.getElementById("detailBtn"),
 };
 
 let selectedFile = null;
@@ -92,6 +93,7 @@ function handleFile(file) {
   refs.fileInfo.style.display = "block";
   refs.dropZone.style.display = "none";
   refs.runBtn.disabled = false;
+  refs.detailBtn.disabled = false;
 }
 
 refs.dropZone.addEventListener("click", () => refs.fileInput.click());
@@ -121,6 +123,7 @@ refs.clearFileBtn.addEventListener("click", () => {
   refs.fileInfo.style.display = "none";
   refs.dropZone.style.display = "block";
   refs.runBtn.disabled = true;
+  refs.detailBtn.disabled = true;
 });
 
 // ── Mode switch ──
@@ -130,6 +133,8 @@ refs.tabBtns.forEach((btn) => {
     refs.tabBtns.forEach((b) => b.classList.remove("active"));
     btn.classList.add("active");
     const mode = btn.dataset.mode;
+    const aiocrView = document.getElementById("aiocrView");
+    if (aiocrView) aiocrView.classList.toggle("active", mode === "aiocr");
     refs.singleView.classList.toggle("active", mode === "single");
     refs.rulesView.classList.toggle("active", mode === "rules");
     refs.historyView.classList.toggle("active", mode === "history");
@@ -275,6 +280,7 @@ refs.runBtn.addEventListener("click", async () => {
 
   // Show progress
   refs.runBtn.disabled = true;
+  refs.detailBtn.disabled = true;
   refs.progressArea.style.display = "block";
   refs.progressFill.className = "progress-fill indeterminate";
   refs.progressText.textContent = "Processing...";
@@ -346,6 +352,7 @@ refs.runBtn.addEventListener("click", async () => {
     allTabIds.forEach((id) => document.getElementById(id).style.display = "none");
     document.getElementById("tabOriginal").style.display = "block";
 
+
     showToast("OCR completed successfully");
   } catch (err) {
     refs.progressFill.className = "progress-fill";
@@ -353,6 +360,86 @@ refs.runBtn.addEventListener("click", async () => {
     refs.progressText.textContent = "Error: " + err.message;
     showToast("Error: " + err.message);
   } finally {
+    refs.runBtn.disabled = false;
+  refs.detailBtn.disabled = false;
+    setTimeout(() => {
+      refs.progressArea.style.display = "none";
+      refs.progressFill.style.width = "0%";
+    }, 3000);
+  }
+});
+
+// ── Detail Mode (Qwen3 VLM) ──
+
+refs.detailBtn.addEventListener("click", async () => {
+  console.log("Detail Mode clicked", { selectedFile: !!selectedFile, ruleId: refs.docTypeSelect.value });
+  if (!selectedFile) return;
+
+  refs.detailBtn.disabled = true;
+  refs.runBtn.disabled = true;
+  refs.progressArea.style.display = "block";
+  refs.progressFill.className = "progress-fill indeterminate";
+  refs.progressText.textContent = "Detail Mode processing...";
+  refs.emptyState.style.display = "none";
+  refs.resultsArea.style.display = "none";
+
+  const formData = new FormData();
+  formData.append("file", selectedFile);
+  formData.append("rule_id", refs.docTypeSelect.value);
+
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 600000); // 10 min timeout
+    const res = await fetch("/api/ocr/detail", { method: "POST", body: formData, signal: controller.signal });
+    clearTimeout(timeoutId);
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ detail: "Server error" }));
+      throw new Error(err.detail || "Detail mode failed");
+    }
+
+    const data = await res.json();
+    currentResultId = data.result_id || null;
+
+    refs.progressFill.className = "progress-fill";
+    refs.progressFill.style.width = "100%";
+    refs.progressText.textContent = "Done!";
+
+    // Render results (same as Run OCR)
+    renderGalleryWithNav(refs.originalGallery, data.original_pages || []);
+    renderGalleryWithNav(refs.layoutGallery, data.layout_images || []);
+    renderFieldsTable(data.extracted_fields || []);
+
+    if (data.detected_type) {
+      refs.detectedTypeBadge.textContent = "Document: " + data.detected_type;
+      refs.detectedTypeBadge.style.display = "inline-block";
+    } else {
+      refs.detectedTypeBadge.style.display = "none";
+    }
+
+    rawMarkdown = data.markdown || "";
+    refs.markdownRaw.textContent = rawMarkdown;
+    refs.markdownBody.innerHTML = simpleMarkdownToHtml(rawMarkdown);
+
+    refs.cropsGallery.innerHTML = '<p style="color:var(--muted);text-align:center;grid-column:1/-1;">Detail mode: no crops</p>';
+
+    // Show results, switch to fields tab
+    refs.resultsArea.style.display = "block";
+    refs.resultTabs.forEach((t) => t.classList.remove("active"));
+    refs.resultTabs[1].classList.add("active");
+    allTabIds.forEach((id) => document.getElementById(id).style.display = "none");
+    document.getElementById("tabFields").style.display = "block";
+
+    showToast("Detail Mode completed");
+  } catch (err) {
+    console.error("Detail mode error:", err);
+    refs.progressFill.className = "progress-fill";
+    refs.progressFill.style.width = "0%";
+    refs.progressText.textContent = "Error: " + err.message;
+    showToast("Error: " + err.message);
+    alert("Detail Mode Error: " + err.message);
+  } finally {
+    refs.detailBtn.disabled = false;
     refs.runBtn.disabled = false;
     setTimeout(() => {
       refs.progressArea.style.display = "none";
@@ -556,4 +643,230 @@ function simpleMarkdownToHtml(md) {
   }).join("\n");
 
   return html;
+}
+
+// ───────────────────────────────────────────────────────────────────
+// AIOCR (v1) — flow-based multi-file analyze
+// ───────────────────────────────────────────────────────────────────
+
+const aiocr = {
+  flowSelect: document.getElementById("aiocrFlowSelect"),
+  caseId: document.getElementById("aiocrCaseId"),
+  dropZone: document.getElementById("aiocrDropZone"),
+  fileInput: document.getElementById("aiocrFileInput"),
+  fileList: document.getElementById("aiocrFileList"),
+  runBtn: document.getElementById("aiocrRunBtn"),
+  progress: document.getElementById("aiocrProgress"),
+  progressText: document.getElementById("aiocrProgressText"),
+  empty: document.getElementById("aiocrEmpty"),
+  results: document.getElementById("aiocrResults"),
+  jobId: document.getElementById("aiocrJobId"),
+  status: document.getElementById("aiocrStatus"),
+  documents: document.getElementById("aiocrDocuments"),
+  warnings: document.getElementById("aiocrWarnings"),
+};
+
+let aiocrFiles = [];
+
+async function aiocrLoadFlows() {
+  if (!aiocr.flowSelect) return;
+  try {
+    const res = await fetch("/v1/aiocr/flows");
+    if (!res.ok) throw new Error("flows " + res.status);
+    const data = await res.json();
+    aiocr.flowSelect.innerHTML = "";
+    Object.entries(data).forEach(([key, flow]) => {
+      const opt = document.createElement("option");
+      opt.value = key;
+      opt.textContent = `${flow.label} (${key})`;
+      aiocr.flowSelect.appendChild(opt);
+    });
+  } catch (e) {
+    aiocr.flowSelect.innerHTML = '<option value="">Failed to load flows</option>';
+    console.error(e);
+  }
+}
+aiocrLoadFlows();
+
+function aiocrRenderFileList() {
+  aiocr.fileList.innerHTML = "";
+  aiocrFiles.forEach((f, idx) => {
+    const row = document.createElement("div");
+    row.className = "aiocr-file-row";
+    row.innerHTML = `
+      <span class="aiocr-file-name">${f.name}</span>
+      <span class="aiocr-file-meta">${formatSize(f.size)}</span>
+      <button class="btn-ghost btn-sm" data-idx="${idx}">×</button>
+    `;
+    row.querySelector("button").addEventListener("click", () => {
+      aiocrFiles.splice(idx, 1);
+      aiocrRenderFileList();
+      aiocr.runBtn.disabled = aiocrFiles.length === 0;
+    });
+    aiocr.fileList.appendChild(row);
+  });
+}
+
+function aiocrAddFiles(fileList) {
+  const allowed = ["pdf", "jpg", "jpeg", "png"];
+  for (const f of fileList) {
+    const ext = f.name.split(".").pop().toLowerCase();
+    if (!allowed.includes(ext)) {
+      showToast("Skipped unsupported: " + f.name);
+      continue;
+    }
+    aiocrFiles.push(f);
+  }
+  aiocrRenderFileList();
+  aiocr.runBtn.disabled = aiocrFiles.length === 0;
+}
+
+if (aiocr.dropZone) {
+  aiocr.dropZone.addEventListener("click", () => aiocr.fileInput.click());
+  aiocr.fileInput.addEventListener("change", () => aiocrAddFiles(aiocr.fileInput.files));
+  aiocr.dropZone.addEventListener("dragover", (e) => {
+    e.preventDefault();
+    aiocr.dropZone.classList.add("dragover");
+  });
+  aiocr.dropZone.addEventListener("dragleave", () => aiocr.dropZone.classList.remove("dragover"));
+  aiocr.dropZone.addEventListener("drop", (e) => {
+    e.preventDefault();
+    aiocr.dropZone.classList.remove("dragover");
+    aiocrAddFiles(e.dataTransfer.files);
+  });
+}
+
+function aiocrConfidenceClass(c) {
+  if (c >= 0.85) return "conf-high";
+  if (c >= 0.60) return "conf-mid";
+  return "conf-low";
+}
+
+function aiocrRenderDocuments(documents) {
+  aiocr.documents.innerHTML = "";
+  if (!documents || documents.length === 0) {
+    aiocr.documents.innerHTML = '<p style="color:var(--muted);text-align:center;">No documents processed</p>';
+    return;
+  }
+  documents.forEach((doc) => {
+    const card = document.createElement("div");
+    card.className = "aiocr-doc-card";
+    const t = doc.doc_type;
+    const tConfClass = aiocrConfidenceClass(t.confidence);
+    const fieldsHtml = (doc.fields || []).map((f) => {
+      const cls = aiocrConfidenceClass(f.confidence);
+      const reviewFlag = f.needs_review
+        ? '<span class="needs-review-flag">needs review</span>'
+        : "";
+      const alt = f.normalized_value && f.normalized_value !== f.value
+        ? `<div class="aiocr-normalized">→ ${f.normalized_value}</div>`
+        : "";
+      const val = f.value
+        ? `<span class="aiocr-field-value">${escapeHtml(f.value)}</span>`
+        : '<span class="aiocr-field-empty">(empty)</span>';
+      return `
+        <div class="aiocr-field-row ${cls}">
+          <div class="aiocr-field-key">
+            <div class="aiocr-field-label">${escapeHtml(f.label)}</div>
+            <div class="aiocr-field-keyname">${escapeHtml(f.key)}</div>
+          </div>
+          <div class="aiocr-field-val">
+            ${val}
+            ${alt}
+          </div>
+          <div class="aiocr-field-conf">
+            <span class="conf-pill ${cls}">${(f.confidence * 100).toFixed(0)}%</span>
+            ${reviewFlag}
+          </div>
+        </div>
+      `;
+    }).join("");
+    card.innerHTML = `
+      <div class="aiocr-doc-head">
+        <div>
+          <div class="aiocr-doc-filename">${escapeHtml(doc.file_name)}</div>
+          <div class="aiocr-doc-id">${doc.document_id}</div>
+        </div>
+        <div class="aiocr-doc-type">
+          <span class="type-badge">${escapeHtml(t.label)}</span>
+          <span class="conf-pill ${tConfClass}">${(t.confidence * 100).toFixed(0)}%</span>
+          <div class="aiocr-doc-typecode">${t.code}</div>
+        </div>
+      </div>
+      <div class="aiocr-fields">${fieldsHtml}</div>
+    `;
+    aiocr.documents.appendChild(card);
+  });
+}
+
+function aiocrRenderWarnings(warnings) {
+  aiocr.warnings.innerHTML = "";
+  if (!warnings || warnings.length === 0) return;
+  const box = document.createElement("div");
+  box.className = "aiocr-warnings";
+  box.innerHTML =
+    "<h4>Warnings</h4>" +
+    warnings.map((w) => `<div class="aiocr-warning">[${w.code}] ${escapeHtml(w.message || "")}</div>`).join("");
+  aiocr.warnings.appendChild(box);
+}
+
+function escapeHtml(s) {
+  return String(s || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+if (aiocr.runBtn) {
+  aiocr.runBtn.addEventListener("click", async () => {
+    if (aiocrFiles.length === 0) return;
+    const flowKey = aiocr.flowSelect.value;
+    if (!flowKey) {
+      showToast("Select a flow first");
+      return;
+    }
+    const caseId = aiocr.caseId.value.trim() || "CASE-" + new Date().toISOString().slice(0, 10);
+
+    aiocr.runBtn.disabled = true;
+    aiocr.progress.style.display = "block";
+    aiocr.progressText.textContent = "Analyzing… (Qwen ensemble per file)";
+    aiocr.empty.style.display = "none";
+    aiocr.results.style.display = "none";
+
+    const fd = new FormData();
+    fd.append("case_id", caseId);
+    fd.append("flow_key", flowKey);
+    const manifest = aiocrFiles.map((f, i) => ({
+      file_id: `FILE-${String(i + 1).padStart(3, "0")}`,
+      file_name: f.name,
+    }));
+    fd.append("file_manifest", JSON.stringify(manifest));
+    aiocrFiles.forEach((f) => fd.append("files", f));
+
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 900000); // 15 min
+      const res = await fetch("/v1/aiocr/analyze", { method: "POST", body: fd, signal: controller.signal });
+      clearTimeout(timeoutId);
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ detail: "Server error" }));
+        throw new Error(err.detail || err.error?.message || "Analyze failed");
+      }
+      const data = await res.json();
+      aiocr.jobId.textContent = data.job_id;
+      aiocr.status.textContent = data.status;
+      aiocr.status.className = "aiocr-status status-" + data.status;
+      aiocrRenderDocuments(data.documents);
+      aiocrRenderWarnings(data.warnings);
+      aiocr.results.style.display = "block";
+      showToast(`Analyze ${data.status} — ${(data.documents || []).length} doc(s)`);
+    } catch (e) {
+      showToast("Error: " + e.message);
+      console.error(e);
+    } finally {
+      aiocr.runBtn.disabled = false;
+      aiocr.progress.style.display = "none";
+    }
+  });
 }
