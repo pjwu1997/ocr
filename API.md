@@ -349,8 +349,10 @@ contracts with the `handwritten_text` field (longer generation).
 
 ## Notes & limitations (v1 / demo)
 
-- `evidence_image_url` is **placeholder only** — the route exists in the
-  response but no image is served at that path yet.
+- `evidence_image_url` returns the **full first-page render** as a PNG,
+  served from `/evidence/{job_id}/{document_id}.png`. The same URL is shared
+  by `doc_type` and every field — per-field bounding-box crops are not yet
+  implemented. Files persist under `./evidence/` until manually cleaned.
 - Multi-page PDFs are processed as **first page only**.
 - No queueing — each request blocks for the full ensemble duration.
 - `partial` status is reserved but not currently emitted; `completed` returns

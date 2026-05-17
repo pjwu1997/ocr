@@ -369,7 +369,7 @@ refs.runBtn.addEventListener("click", async () => {
   }
 });
 
-// ── Detail Mode (Qwen3 VLM) ──
+// ── Detail Mode (AsiaMath OCR – detail) ──
 
 refs.detailBtn.addEventListener("click", async () => {
   console.log("Detail Mode clicked", { selectedFile: !!selectedFile, ruleId: refs.docTypeSelect.value });
@@ -830,7 +830,7 @@ if (aiocr.runBtn) {
 
     aiocr.runBtn.disabled = true;
     aiocr.progress.style.display = "block";
-    aiocr.progressText.textContent = "Analyzing… (Qwen ensemble per file)";
+    aiocr.progressText.textContent = "Analyzing… (AsiaMath OCR ensemble per file)";
     aiocr.empty.style.display = "none";
     aiocr.results.style.display = "none";
 

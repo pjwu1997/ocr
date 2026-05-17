@@ -19,6 +19,9 @@ ocr.db-*
 # Large test fixtures (kept on disk, not in repo)
 封存/
 
+# Runtime evidence images (served at /evidence)
+evidence/
+
 # Scratch / one-off
 20260428165118499.pdf
 bench_pipeline.py

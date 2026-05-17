@@ -87,6 +87,10 @@ app.add_middleware(SessionMiddleware, secret_key=secrets.token_hex(32))
 STATIC_DIR = os.path.join(os.path.dirname(__file__), "static")
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
+EVIDENCE_DIR = os.path.join(os.path.dirname(__file__), "evidence")
+os.makedirs(EVIDENCE_DIR, exist_ok=True)
+app.mount("/evidence", StaticFiles(directory=EVIDENCE_DIR), name="evidence")
+
 
 # ── Auth ──
 
@@ -1240,7 +1244,7 @@ def _ensemble_extract(img: "Image.Image", doctype_code: str) -> dict[str, dict]:
     return aggregated
 
 
-def _build_field_response(field_key: str, ext: dict) -> dict:
+def _build_field_response(field_key: str, ext: dict, evidence_url: str = "") -> dict:
     """Build a spec-compliant field response object."""
     field_def = aiocr_spec.FIELDS.get(field_key, {"label": field_key, "type": "string"})
     value = ext["value"]
@@ -1253,7 +1257,8 @@ def _build_field_response(field_key: str, ext: dict) -> dict:
         "normalized_value": normalized,
         "confidence": round(ext["confidence"], 2),
         "needs_review": needs_review,
-        "evidence_image_url": "",  # placeholder for v1
+        # v1: same full-page image for all fields (no per-field crops yet)
+        "evidence_image_url": evidence_url,
     }
 
 
@@ -1332,11 +1337,21 @@ async def aiocr_analyze(
             doctype_code, type_conf = _classify_document(img, flow_key)
             doctype_def = aiocr_spec.DOCTYPES[doctype_code]
 
+            # Persist rendered first-page image as the evidence asset
+            doc_id = f"DOC-{uuid_module.uuid4().hex[:8]}"
+            job_dir = os.path.join(EVIDENCE_DIR, job_id)
+            os.makedirs(job_dir, exist_ok=True)
+            evidence_path = os.path.join(job_dir, f"{doc_id}.png")
+            img.save(evidence_path, format="PNG")
+            # Return absolute URL so the caller (ERP) can fetch directly.
+            # Honors X-Forwarded-Host/Proto from a reverse proxy via base_url.
+            base = str(request.base_url).rstrip("/")
+            evidence_url = f"{base}/evidence/{job_id}/{doc_id}.png"
+
             # Ensemble extract
             extracted = _ensemble_extract(img, doctype_code)
-            fields = [_build_field_response(k, v) for k, v in extracted.items()]
+            fields = [_build_field_response(k, v, evidence_url) for k, v in extracted.items()]
 
-            doc_id = f"DOC-{uuid_module.uuid4().hex[:8]}"
             documents.append({
                 "document_id": doc_id,
                 "file_id": manifest_by_name.get(upload.filename, upload.filename),
@@ -1345,7 +1360,7 @@ async def aiocr_analyze(
                     "code": doctype_code,
                     "label": doctype_def["label"],
                     "confidence": round(type_conf, 2),
-                    "evidence_image_url": f"/evidence/{job_id}/documents/{doc_id}_type.png",
+                    "evidence_image_url": evidence_url,
                 },
                 "fields": fields,
             })
